@@ -175,8 +175,8 @@ const getStatusBadgeClass = (status) => {
 </script>
 
 <template>
-  <div class="container py-4">
-    <h1 class="mb-2">Service Professionals</h1>
+  <div class="container">
+    <h1 class="mb-4 page-title">Professionals</h1>
 
     <!-- Filters & Search -->
     <div class="row mb-2">

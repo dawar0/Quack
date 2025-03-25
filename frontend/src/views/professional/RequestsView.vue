@@ -171,7 +171,7 @@ const getStatusBadgeClass = (status) => {
 
 <template>
   <div class="container py-4">
-    <h1 class="mb-4">Service Requests</h1>
+    <h1 class="page-title mb-4">Service Requests</h1>
 
     <!-- Status Filters -->
     <div class="mb-4">

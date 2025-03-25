@@ -83,6 +83,8 @@ const handleItemClick = (item) => {
   background-color: #ffffff;
   font-family: 'Inter', sans-serif;
   width: 100%;
+  border-right: 4px solid #000000;
+  min-height: 100vh;
 }
 
 .sidebar-title {
@@ -92,7 +94,8 @@ const handleItemClick = (item) => {
   text-transform: uppercase;
   letter-spacing: 1px;
   color: #000;
-  border-bottom: 4px solid #ff7f50;
+  border-bottom: 4px solid #000;
+  margin-bottom: 1rem;
 }
 
 .nav-item {

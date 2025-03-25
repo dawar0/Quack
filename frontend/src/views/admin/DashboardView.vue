@@ -100,7 +100,7 @@ const stats = [
         <!-- If we're on the main admin page, show dashboard overview -->
         <div v-if="currentRoute === 'admin'">
           <!-- Stats Grid -->
-          <h1 class="py-4 container">Activity</h1>
+          <h1 class="mb-4 page-title">Activity</h1>
           <div class="stats-grid">
             <NeoCard
               v-for="stat in stats"
@@ -184,7 +184,6 @@ const stats = [
   padding-left: 0;
   padding-right: 0;
   min-height: 100vh;
-  border-right: 4px solid #ff7f50;
 }
 
 .stats-grid {

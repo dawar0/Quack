@@ -1,12 +1,16 @@
 <script setup>
-import { ref } from 'vue'
-import { useRouter } from 'vue-router'
+import { ref, computed } from 'vue'
+import { useRouter, useRoute } from 'vue-router'
 import NeoDashboardSidebar from '@/components/dashboard/NeoDashboardSidebar.vue'
 import NeoCard from '@/components/ui/NeoCard.vue'
 import NeoButton from '@/components/ui/NeoButton.vue'
 import NeoBadge from '@/components/ui/NeoBadge.vue'
 
 const router = useRouter()
+const route = useRoute()
+
+// Check if we're on the main professional route
+const isMainDashboard = computed(() => route.path === '/professional')
 
 // Professional sidebar menu items
 const menuItems = [
@@ -34,6 +38,7 @@ const professionalData = ref({
   serviceType: 'Plumbing',
   experience: '8 years',
   profileImage: 'https://randomuser.me/api/portraits/men/41.jpg',
+  rating: 4.8,
   joinDate: '2023-02-10',
   completedJobs: 37,
   status: 'Approved',
@@ -184,7 +189,7 @@ const handleMenuAction = (item) => {
 <template>
   <div class="neo-brutalist">
     <div class="dashboard-wrapper">
-      <!-- Sidebar -->
+      <!-- Sidebar - Always visible -->
       <div class="sidebar-container">
         <NeoDashboardSidebar
           :menuItems="menuItems"
@@ -195,197 +200,205 @@ const handleMenuAction = (item) => {
 
       <!-- Main Content -->
       <div class="main-content">
-        <div class="header-section">
-          <h1 class="page-title">Dashboard</h1>
-          <div class="status-badge">
-            <NeoBadge :variant="getStatusBadgeClass(professionalData.status)" size="lg">
-              {{ professionalData.status }}
-            </NeoBadge>
-          </div>
-        </div>
-
-        <!-- Profile Quick View -->
-        <div class="profile-quick-view">
-          <div class="profile-avatar">
-            <img :src="professionalData.profileImage" alt="Profile" />
-          </div>
-          <div class="profile-info">
-            <h2>{{ professionalData.name }}</h2>
-            <div class="service-type">{{ professionalData.serviceType }}</div>
-          </div>
-          <div class="profile-actions">
-            <NeoButton variant="primary" @click="router.push('/professional/profile')">
-              Edit Profile
-            </NeoButton>
-          </div>
-        </div>
-
-        <!-- Stats Cards -->
-        <div class="stats-container">
-          <NeoCard v-for="stat in stats" :key="stat.id" :variant="stat.variant" class="stat-card">
-            <div class="stat-content">
-              <div class="stat-icon">
-                <i :class="stat.icon"></i>
-              </div>
-              <div class="stat-details">
-                <div class="stat-label">{{ stat.label }}</div>
-                <div class="stat-value">{{ stat.value }}</div>
-              </div>
+        <!-- Dashboard content - Only shown on main professional route -->
+        <div v-if="isMainDashboard">
+          <div class="header-section">
+            <h1 class="page-title">Dashboard</h1>
+            <div class="status-badge">
+              <NeoBadge :variant="getStatusBadgeClass(professionalData.status)" size="lg">
+                {{ professionalData.status }}
+              </NeoBadge>
             </div>
-          </NeoCard>
-        </div>
+          </div>
 
-        <!-- Main Content Grid -->
-        <div class="content-grid">
-          <!-- Recent Service Requests -->
-          <NeoCard class="service-requests-card">
-            <template #header>
-              <div class="card-header-content">
-                <h5 class="card-title">Recent Service Requests</h5>
-                <NeoButton variant="dark" size="sm" @click="viewAllRequests"> View All </NeoButton>
-              </div>
-            </template>
-
-            <div class="table-wrapper">
-              <table class="request-table">
-                <thead>
-                  <tr>
-                    <th>ID</th>
-                    <th>Customer</th>
-                    <th>Service</th>
-                    <th>Date</th>
-                    <th>Status</th>
-                    <th>Amount</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  <tr v-for="request in serviceRequests" :key="request.id" class="request-row">
-                    <td>
-                      <div class="request-id">{{ request.id }}</div>
-                    </td>
-                    <td>{{ request.customer }}</td>
-                    <td>{{ request.serviceName }}</td>
-                    <td>{{ request.date }}</td>
-                    <td>
-                      <NeoBadge :variant="getStatusBadgeClass(request.status)">
-                        {{ request.status }}
-                      </NeoBadge>
-                    </td>
-                    <td class="amount">{{ request.amount }}</td>
-                  </tr>
-                </tbody>
-              </table>
+          <!-- Profile Quick View -->
+          <div class="profile-quick-view">
+            <div class="profile-avatar">
+              <img :src="professionalData.profileImage" alt="Profile" />
             </div>
-          </NeoCard>
+            <div class="profile-info">
+              <h2>{{ professionalData.name }}</h2>
+              <div class="service-type">{{ professionalData.serviceType }}</div>
+            </div>
+            <div class="profile-actions">
+              <NeoButton variant="primary" @click="router.push('/professional/profile')">
+                Edit Profile
+              </NeoButton>
+            </div>
+          </div>
 
-          <!-- Activity Feed -->
-          <NeoCard variant="danger" class="activity-card">
-            <template #header>
-              <h5 class="card-title">Activity Feed</h5>
-            </template>
-
-            <div class="activity-feed">
-              <div v-for="activity in recentActivity" :key="activity.id" class="activity-item">
-                <div class="activity-icon">
-                  <i
-                    v-if="activity.type === 'service_request' && activity.action === 'accepted'"
-                    class="fas fa-check-circle"
-                  ></i>
-                  <i
-                    v-else-if="
-                      activity.type === 'service_request' && activity.action === 'completed'
-                    "
-                    class="fas fa-check-double"
-                  ></i>
-                  <i v-else-if="activity.type === 'payment'" class="fas fa-rupee-sign"></i>
-                  <i
-                    v-else-if="
-                      activity.type === 'service_request' && activity.action === 'rejected'
-                    "
-                    class="fas fa-times-circle"
-                  ></i>
+          <!-- Stats Cards -->
+          <div class="stats-container">
+            <NeoCard v-for="stat in stats" :key="stat.id" :variant="stat.variant" class="stat-card">
+              <div class="stat-content">
+                <div class="stat-icon">
+                  <i :class="stat.icon"></i>
                 </div>
-                <div class="activity-content">
-                  <div class="activity-message">
-                    <span
+                <div class="stat-details">
+                  <div class="stat-label">{{ stat.label }}</div>
+                  <div class="stat-value">{{ stat.value }}</div>
+                </div>
+              </div>
+            </NeoCard>
+          </div>
+
+          <!-- Main Content Grid -->
+          <div class="content-grid">
+            <!-- Recent Service Requests -->
+            <NeoCard class="service-requests-card">
+              <template #header>
+                <div class="card-header-content">
+                  <h5 class="card-title">Recent Service Requests</h5>
+                  <NeoButton variant="dark" size="sm" @click="viewAllRequests">
+                    View All
+                  </NeoButton>
+                </div>
+              </template>
+
+              <div class="table-wrapper">
+                <table class="request-table">
+                  <thead>
+                    <tr>
+                      <th>ID</th>
+                      <th>Customer</th>
+                      <th>Service</th>
+                      <th>Date</th>
+                      <th>Status</th>
+                      <th>Amount</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr v-for="request in serviceRequests" :key="request.id" class="request-row">
+                      <td>
+                        <div class="request-id">{{ request.id }}</div>
+                      </td>
+                      <td>{{ request.customer }}</td>
+                      <td>{{ request.serviceName }}</td>
+                      <td>{{ request.date }}</td>
+                      <td>
+                        <NeoBadge :variant="getStatusBadgeClass(request.status)">
+                          {{ request.status }}
+                        </NeoBadge>
+                      </td>
+                      <td class="amount">{{ request.amount }}</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </NeoCard>
+
+            <!-- Activity Feed -->
+            <NeoCard variant="danger" class="activity-card">
+              <template #header>
+                <h5 class="card-title">Activity Feed</h5>
+              </template>
+
+              <div class="activity-feed">
+                <div v-for="activity in recentActivity" :key="activity.id" class="activity-item">
+                  <div class="activity-icon">
+                    <i
                       v-if="activity.type === 'service_request' && activity.action === 'accepted'"
-                    >
-                      You accepted a request from <strong>{{ activity.customer }}</strong>
-                    </span>
-                    <span
+                      class="fas fa-check-circle"
+                    ></i>
+                    <i
                       v-else-if="
                         activity.type === 'service_request' && activity.action === 'completed'
                       "
-                    >
-                      You completed a service for <strong>{{ activity.customer }}</strong>
-                    </span>
-                    <span v-else-if="activity.type === 'payment'">
-                      Payment of <strong>{{ activity.amount }}</strong> received from
-                      <strong>{{ activity.customer }}</strong>
-                    </span>
-                    <span
+                      class="fas fa-check-double"
+                    ></i>
+                    <i v-else-if="activity.type === 'payment'" class="fas fa-rupee-sign"></i>
+                    <i
                       v-else-if="
                         activity.type === 'service_request' && activity.action === 'rejected'
                       "
-                    >
-                      You rejected a request from <strong>{{ activity.customer }}</strong>
-                    </span>
+                      class="fas fa-times-circle"
+                    ></i>
                   </div>
-                  <div class="activity-time">{{ activity.date }}</div>
+                  <div class="activity-content">
+                    <div class="activity-message">
+                      <span
+                        v-if="activity.type === 'service_request' && activity.action === 'accepted'"
+                      >
+                        You accepted a request from <strong>{{ activity.customer }}</strong>
+                      </span>
+                      <span
+                        v-else-if="
+                          activity.type === 'service_request' && activity.action === 'completed'
+                        "
+                      >
+                        You completed a service for <strong>{{ activity.customer }}</strong>
+                      </span>
+                      <span v-else-if="activity.type === 'payment'">
+                        Payment of <strong>{{ activity.amount }}</strong> received from
+                        <strong>{{ activity.customer }}</strong>
+                      </span>
+                      <span
+                        v-else-if="
+                          activity.type === 'service_request' && activity.action === 'rejected'
+                        "
+                      >
+                        You rejected a request from <strong>{{ activity.customer }}</strong>
+                      </span>
+                    </div>
+                    <div class="activity-time">{{ activity.date }}</div>
+                  </div>
                 </div>
               </div>
-            </div>
-          </NeoCard>
+            </NeoCard>
 
-          <!-- Upcoming Appointments -->
-          <NeoCard variant="warning" class="appointments-card">
-            <template #header>
-              <h5 class="card-title">Upcoming Appointments</h5>
-            </template>
+            <!-- Upcoming Appointments -->
+            <NeoCard variant="warning" class="appointments-card">
+              <template #header>
+                <h5 class="card-title">Upcoming Appointments</h5>
+              </template>
 
-            <div v-if="upcomingAppointments.length === 0" class="no-appointments">
-              <div class="empty-state">
-                <i class="fas fa-calendar-times"></i>
-                <p>No upcoming appointments</p>
-              </div>
-            </div>
-
-            <div v-else class="appointments-list">
-              <div
-                v-for="appointment in upcomingAppointments"
-                :key="appointment.id"
-                class="appointment-item"
-              >
-                <div class="appointment-header">
-                  <h6 class="appointment-service">{{ appointment.service }}</h6>
-                  <NeoBadge variant="primary">Upcoming</NeoBadge>
-                </div>
-                <div class="appointment-details">
-                  <div class="appointment-detail">
-                    <i class="fas fa-user"></i>
-                    <span>{{ appointment.customer }}</span>
-                  </div>
-                  <div class="appointment-detail">
-                    <i class="fas fa-calendar"></i>
-                    <span>{{ appointment.date }}</span>
-                  </div>
-                  <div class="appointment-detail">
-                    <i class="fas fa-clock"></i>
-                    <span>{{ appointment.time }}</span>
-                  </div>
-                  <div class="appointment-detail">
-                    <i class="fas fa-map-marker-alt"></i>
-                    <span>{{ appointment.address }}</span>
-                  </div>
-                </div>
-                <div class="appointment-actions">
-                  <NeoButton variant="dark" size="sm">Get Directions</NeoButton>
-                  <NeoButton variant="danger" size="sm" outline>Cancel</NeoButton>
+              <div v-if="upcomingAppointments.length === 0" class="no-appointments">
+                <div class="empty-state">
+                  <i class="fas fa-calendar-times"></i>
+                  <p>No upcoming appointments</p>
                 </div>
               </div>
-            </div>
-          </NeoCard>
+
+              <div v-else class="appointments-list">
+                <div
+                  v-for="appointment in upcomingAppointments"
+                  :key="appointment.id"
+                  class="appointment-item"
+                >
+                  <div class="appointment-header">
+                    <h6 class="appointment-service">{{ appointment.service }}</h6>
+                    <NeoBadge variant="primary">Upcoming</NeoBadge>
+                  </div>
+                  <div class="appointment-details">
+                    <div class="appointment-detail">
+                      <i class="fas fa-user"></i>
+                      <span>{{ appointment.customer }}</span>
+                    </div>
+                    <div class="appointment-detail">
+                      <i class="fas fa-calendar"></i>
+                      <span>{{ appointment.date }}</span>
+                    </div>
+                    <div class="appointment-detail">
+                      <i class="fas fa-clock"></i>
+                      <span>{{ appointment.time }}</span>
+                    </div>
+                    <div class="appointment-detail">
+                      <i class="fas fa-map-marker-alt"></i>
+                      <span>{{ appointment.address }}</span>
+                    </div>
+                  </div>
+                  <div class="appointment-actions">
+                    <NeoButton variant="dark" size="sm">Get Directions</NeoButton>
+                    <NeoButton variant="danger" size="sm" outline>Cancel</NeoButton>
+                  </div>
+                </div>
+              </div>
+            </NeoCard>
+          </div>
         </div>
+
+        <!-- Child route content - Shown when on child routes -->
+        <router-view v-else></router-view>
       </div>
     </div>
   </div>
@@ -405,8 +418,8 @@ const handleMenuAction = (item) => {
 }
 
 .sidebar-container {
-  border-right: 4px solid #ff7f50;
   min-height: 100vh;
+  background-color: white;
   position: sticky;
   top: 0;
   height: 100vh;
@@ -421,26 +434,6 @@ const handleMenuAction = (item) => {
   justify-content: space-between;
   align-items: center;
   margin-bottom: 2rem;
-}
-
-.page-title {
-  font-size: 2.5rem;
-  font-weight: 900;
-  text-transform: uppercase;
-  color: #000;
-  letter-spacing: -1px;
-  position: relative;
-  display: inline-block;
-}
-
-.page-title::after {
-  content: '';
-  position: absolute;
-  bottom: -5px;
-  left: 0;
-  width: 100%;
-  height: 4px;
-  background-color: #ff7f50;
 }
 
 .status-badge {
@@ -505,11 +498,6 @@ const handleMenuAction = (item) => {
   margin-bottom: 0.25rem;
   text-transform: uppercase;
   letter-spacing: 0.5px;
-}
-
-.rating {
-  font-weight: 700;
-  color: #ffc107;
 }
 
 .profile-actions {
@@ -822,9 +810,8 @@ const handleMenuAction = (item) => {
     position: relative;
     height: auto;
     min-height: auto;
-    background-color: white;
     border-right: none;
-    border-bottom: 4px solid #ff7f50;
+    background-color: white;
   }
 
   .stats-container {

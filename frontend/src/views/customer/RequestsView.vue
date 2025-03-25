@@ -1,5 +1,6 @@
 <script setup>
-import { ref, computed } from 'vue'
+import { ref, computed, onMounted } from 'vue'
+import { useRoute } from 'vue-router'
 import {
   NeoButton,
   NeoCard,
@@ -9,6 +10,8 @@ import {
   NeoBadge,
   NeoAlert,
 } from '@/components/ui'
+
+const route = useRoute()
 
 // Sample data for service requests
 const serviceRequests = ref([
@@ -94,6 +97,17 @@ const newRequest = ref({
 const showRequestDetails = ref(false)
 const selectedRequest = ref(null)
 
+// Feedback modal state
+const showFeedbackModal = ref(false)
+const feedbackMessage = ref('')
+const feedbackTitle = ref('')
+const feedbackVariant = ref('info')
+
+// Confirmation modal state
+const showConfirmModal = ref(false)
+const confirmAction = ref(() => {})
+const confirmMessage = ref('')
+
 // Filter state
 const statusFilter = ref('all')
 
@@ -122,7 +136,7 @@ const createServiceRequest = () => {
     !newRequest.value.expected_date ||
     !newRequest.value.description
   ) {
-    alert('Please fill in all required fields.')
+    showFeedback('Error', 'Please fill in all required fields.', 'danger')
     return
   }
 
@@ -131,7 +145,7 @@ const createServiceRequest = () => {
     (s) => s.id === Number.parseInt(newRequest.value.service_id, 10),
   )
   if (!service) {
-    alert('Invalid service selected.')
+    showFeedback('Error', 'Invalid service selected.', 'danger')
     return
   }
 
@@ -162,7 +176,15 @@ const createServiceRequest = () => {
   }
   showNewRequestForm.value = false
 
-  alert('Service request created successfully!')
+  showFeedback('Success', 'Service request created successfully!', 'success')
+}
+
+// Helper function to show feedback modal
+const showFeedback = (title, message, variant = 'info') => {
+  feedbackTitle.value = title
+  feedbackMessage.value = message
+  feedbackVariant.value = variant
+  showFeedbackModal.value = true
 }
 
 // View details of a request
@@ -179,21 +201,23 @@ const closeServiceRequest = (requestId) => {
       ...serviceRequests.value[index],
       status: 'closed',
     }
-    alert('Service request marked as closed.')
+    showFeedback('Success', 'Service request marked as closed.', 'success')
     showRequestDetails.value = false
   }
 }
 
 // Cancel a service request
 const cancelServiceRequest = (requestId) => {
-  if (confirm('Are you sure you want to cancel this service request?')) {
+  confirmMessage.value = 'Are you sure you want to cancel this service request?'
+  confirmAction.value = () => {
     const index = serviceRequests.value.findIndex((req) => req.id === requestId)
     if (index !== -1 && ['requested', 'assigned'].includes(serviceRequests.value[index].status)) {
       serviceRequests.value.splice(index, 1)
-      alert('Service request cancelled successfully.')
+      showFeedback('Success', 'Service request cancelled successfully.', 'success')
       showRequestDetails.value = false
     }
   }
+  showConfirmModal.value = true
 }
 
 // Helper function to get status badge class
@@ -219,12 +243,25 @@ const minDate = () => {
   const today = new Date()
   return today.toISOString().split('T')[0]
 }
+
+// Handle confirmation
+const executeConfirmAction = () => {
+  confirmAction.value()
+  showConfirmModal.value = false
+}
+
+// Check for query parameter on mount
+onMounted(() => {
+  if (route.query.openRequestModal === 'true') {
+    showNewRequestForm.value = true
+  }
+})
 </script>
 
 <template>
   <div class="container py-4">
     <div class="d-flex justify-content-between align-items-center mb-4">
-      <h1>My Service Requests</h1>
+      <h1 class="page-title">My Service Requests</h1>
       <NeoButton @click="showNewRequestForm = true" variant="primary">
         <i class="bi bi-plus-circle me-2"></i> New Service Request
       </NeoButton>
@@ -384,6 +421,29 @@ const minDate = () => {
           class="ms-2"
         >
           Cancel Request
+        </NeoButton>
+      </template>
+    </NeoModal>
+
+    <!-- Feedback Modal -->
+    <NeoModal v-model="showFeedbackModal" :title="feedbackTitle">
+      <NeoAlert :variant="feedbackVariant" class="mb-0">
+        {{ feedbackMessage }}
+      </NeoAlert>
+      <template #footer>
+        <NeoButton variant="secondary" @click="showFeedbackModal = false">Close</NeoButton>
+      </template>
+    </NeoModal>
+
+    <!-- Confirmation Modal -->
+    <NeoModal v-model="showConfirmModal" title="Confirm Action">
+      <NeoAlert variant="warning" class="mb-3">
+        {{ confirmMessage }}
+      </NeoAlert>
+      <template #footer>
+        <NeoButton variant="secondary" @click="showConfirmModal = false">Cancel</NeoButton>
+        <NeoButton variant="primary" @click="executeConfirmAction" class="ms-2">
+          Confirm
         </NeoButton>
       </template>
     </NeoModal>

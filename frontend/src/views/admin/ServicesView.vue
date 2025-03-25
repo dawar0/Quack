@@ -135,9 +135,9 @@ const deleteService = (id) => {
 </script>
 
 <template>
-  <div class="container py-4">
+  <div class="container">
     <div class="d-flex justify-content-between align-items-center mb-2">
-      <h1>Service Management</h1>
+      <h1 class="page-title">Management</h1>
       <NeoButton @click="addService" variant="primary">
         <i class="bi bi-plus-circle me-2"></i> Add New Service
       </NeoButton>

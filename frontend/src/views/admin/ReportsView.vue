@@ -202,7 +202,7 @@ setDefaultDateRange()
 
 <template>
   <div>
-    <h2 class="mb-4">REPORTS</h2>
+    <h1 class="mb-4 page-title">Reports</h1>
 
     <!-- Report Options -->
     <NeoCard class="mb-4">
@@ -440,25 +440,6 @@ setDefaultDateRange()
 </template>
 
 <style scoped>
-h2 {
-  font-weight: 800;
-  text-transform: uppercase;
-  letter-spacing: 1px;
-  position: relative;
-  display: inline-block;
-  padding-bottom: 5px;
-}
-
-h2:after {
-  content: '';
-  position: absolute;
-  bottom: 0;
-  left: 0;
-  height: 4px;
-  width: 100%;
-  background: #000;
-}
-
 .list-group-item {
   border-width: 2px;
   margin-bottom: 0.5rem;

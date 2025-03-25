@@ -163,6 +163,9 @@ const handleBackdropClick = (e) => {
   border-top: 2px solid #000;
   padding: 1rem 1.5rem;
 }
+.btn-close {
+  border-radius: 0;
+}
 
 .neobrutalism-modal .btn-close {
   background: transparent

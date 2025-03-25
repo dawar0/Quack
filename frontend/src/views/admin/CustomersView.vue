@@ -135,7 +135,7 @@ const getRequestStatusBadgeClass = (status) => {
 
 <template>
   <div class="container-fluid py-4">
-    <h2 class="mb-4">CUSTOMERS</h2>
+    <h2 class="mb-4 page-title">Customers</h2>
 
     <!-- Search and Filter -->
     <div class="row mb-4">
@@ -293,23 +293,4 @@ const getRequestStatusBadgeClass = (status) => {
   </div>
 </template>
 
-<style scoped>
-h2 {
-  font-weight: 800;
-  text-transform: uppercase;
-  letter-spacing: 1px;
-  position: relative;
-  display: inline-block;
-  padding-bottom: 5px;
-}
-
-h2:after {
-  content: '';
-  position: absolute;
-  bottom: 0;
-  left: 0;
-  height: 4px;
-  width: 100%;
-  background: #000;
-}
-</style>
+<style scoped></style>
