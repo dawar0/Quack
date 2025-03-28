@@ -180,7 +180,7 @@ const testimonials = ref([
                 <i class="bi bi-star" style="font-size: 3.5rem"></i>
               </NeoCard>
               <div class="step-number">3</div>
-              <h4 class="fw-bold text-uppercase mt-4 process-title">Enjoy & Review</h4>
+              <h4 class="fw-bold text-uppercase mt-4 process-title">Enjoy</h4>
               <p class="process-desc">Enjoy quality service and share your experience</p>
             </div>
           </div>

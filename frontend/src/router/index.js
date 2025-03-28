@@ -75,11 +75,6 @@ const router = createRouter({
       meta: { requiresAuth: true, role: 'customer' },
       children: [
         {
-          path: 'services',
-          name: 'customer-services',
-          component: () => import('../views/customer/ServicesView.vue'),
-        },
-        {
           path: 'requests',
           name: 'customer-requests',
           component: () => import('../views/customer/RequestsView.vue'),
