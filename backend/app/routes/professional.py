@@ -280,7 +280,7 @@ class TakeActionOnRequest(Resource):
 
         elif action == "complete":
             # Only allow completion if the request is assigned to this professional
-            if service_request.professional_id != professional_id:
+            if int(service_request.professional_id) != int(professional_id):
                 return (
                     professional_bp.marshal(
                         {"message": "This request is not assigned to you"},
@@ -290,7 +290,7 @@ class TakeActionOnRequest(Resource):
                 )
 
             # Only allow completion if the request is in accepted status
-            if service_request.service_status != "Accepted":
+            if service_request.service_status.lower() != "accepted":
                 return (
                     professional_bp.marshal(
                         {
@@ -306,9 +306,7 @@ class TakeActionOnRequest(Resource):
             db.session.commit()
 
             delete_pattern(f"professional:requests:assigned:{professional_id}")
-            delete_pattern(
-                "professional:requests"
-            )  # Invalidate main professional requests cache
+            delete_pattern("professional:requests")
             delete_pattern(f"professional:request:{request_id}")
             delete_pattern(f"professional:dashboard:stats:{professional_id}")
             delete_pattern(f"professional:dashboard:activity:{professional_id}")
@@ -316,7 +314,6 @@ class TakeActionOnRequest(Resource):
             delete_pattern(f"customer:request:{request_id}")
             delete_pattern(f"customer:activity:{service_request.customer_id}")
 
-            # Notify the customer that their service request has been completed
             customer = User.query.get(service_request.customer_id)
             if customer and customer.email:
                 service_name = (
