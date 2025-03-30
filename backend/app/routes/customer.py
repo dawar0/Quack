@@ -116,9 +116,19 @@ class CustomerRequests(Resource):
         db.session.add(new_request)
         db.session.commit()
 
-        delete_pattern(f"customer:requests:{customer_id}")
-        delete_pattern(f"customer:stats:{customer_id}")
-        delete_pattern(f"customer:activity:{customer_id}")
+        # Invalidate customer cache
+        delete_pattern("customer:requests:*")
+        delete_pattern("customer:request:*")
+        delete_pattern("customer:stats:*")
+        delete_pattern("customer:activity:*")
+
+        # Invalidate admin cache
+        delete_pattern("admin:requests:*")
+        delete_pattern("admin:dashboard:stats:*")
+
+        # Invalidate professional cache for available requests
+        delete_pattern("professional:requests:*")
+        delete_pattern("professional:requests:available:*")
 
         # Send confirmation email to the customer
         customer = User.query.get(customer_id)
@@ -136,7 +146,7 @@ class CustomerRequests(Resource):
 
     @jwt_required()
     @customer_bp.marshal_list_with(service_request_model)
-    @cache_result("customer:requests:{identity}", expiration=300)
+    @cache_result("customer:requests", expiration=300, args_as_key=True)
     def get(self):
         """List all service requests for the logged-in customer."""
         customer_id = get_jwt_identity()
@@ -156,7 +166,7 @@ class CustomerRequestDetail(Resource):
     @jwt_required()
     @customer_bp.marshal_with(service_request_model)
     @customer_bp.response(404, "Request not found")
-    @cache_result("customer:request:{request_id}:{identity}", expiration=300)
+    @cache_result("customer:request", expiration=300, args_as_key=True)
     def get(self, request_id):
         """Get details of a specific service request for the logged-in customer."""
         customer_id = get_jwt_identity()
@@ -199,28 +209,22 @@ class TakeActionOnRequest(Resource):
             service_request.service_status = "Cancelled"
             db.session.commit()
 
-            delete_pattern(f"customer:requests:{customer_id}")
-            delete_pattern(f"customer:request:{request_id}:{customer_id}")
-            delete_pattern(f"customer:stats:{customer_id}")
-            delete_pattern(f"customer:activity:{customer_id}")
+            delete_pattern("customer:requests:*")
+            delete_pattern("customer:request:*")
+            delete_pattern("customer:stats:*")
+            delete_pattern("customer:activity:*")
             delete_pattern(
-                "professional:requests"
+                "professional:requests:*"
             )  # Invalidate main professional requests cache
             delete_pattern(
-                "professional:requests:available"
+                "professional:requests:available:*"
             )  # Invalidate available requests cache
 
             if service_request.professional_id:
-                delete_pattern(
-                    f"professional:requests:assigned:{service_request.professional_id}"
-                )
-                delete_pattern(f"professional:request:{request_id}")
-                delete_pattern(
-                    f"professional:dashboard:stats:{service_request.professional_id}"
-                )
-                delete_pattern(
-                    f"professional:dashboard:activity:{service_request.professional_id}"
-                )
+                delete_pattern("professional:requests:assigned:*")
+                delete_pattern("professional:request:*")
+                delete_pattern("professional:dashboard:stats:*")
+                delete_pattern("professional:dashboard:activity:*")
 
                 # Notify the professional if one was assigned
                 professional = User.query.get(service_request.professional_id)
@@ -394,9 +398,9 @@ class CustomerProfile(Resource):
 
         db.session.commit()
 
-        delete_pattern(f"customer:profile:{customer_id}")
-        delete_pattern(f"customer:stats:{customer_id}")
-        delete_pattern(f"customer:activity:{customer_id}")
+        delete_pattern("customer:profile:*")
+        delete_pattern(f"customer:stats:*")
+        delete_pattern(f"customer:activity:*")
 
         return customer
 
@@ -424,7 +428,7 @@ class CustomerPassword(Resource):
         db.session.commit()
 
         # Invalidate relevant caches
-        delete_pattern(f"customer:profile:{customer_id}")
+        delete_pattern("customer:profile:*")
 
         return {"message": "Password updated successfully"}, 200
 
@@ -495,7 +499,7 @@ class CustomerProfilePicture(Resource):
             db.session.commit()
 
             # Invalidate profile cache
-            delete_pattern(f"customer:profile:{customer_id}")
+            delete_pattern("customer:profile:*")
 
             return {"message": "Profile picture updated successfully"}, 200
 
@@ -527,7 +531,7 @@ class CustomerAccount(Resource):
         db.session.commit()
 
         # Invalidate all customer-related caches
-        delete_pattern(f"customer:*:{customer_id}")
+        delete_pattern("customer:*")
 
         return {"message": "Account deleted successfully"}, 200
 
