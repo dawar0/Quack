@@ -1,73 +1,18 @@
 <script setup>
-import { ref, computed } from 'vue'
-import { NeoButton, NeoCard, NeoInput, NeoSelect, NeoModal, NeoBadge } from '@/components/ui'
+import { ref, computed, onMounted } from 'vue'
+import { useAdminStore } from '@/stores/admin'
+import { NeoButton, NeoCard, NeoInput, NeoSelect, NeoModal, NeoBadge, NeoAlert, NeoIcon } from '@/components/ui'
+import { adminAPI, professionalAPI } from '@/services/api'
 import { toastService } from '@/services/toastService'
 
-// Sample professionals data - in a real app, this would come from an API
-const professionals = ref([
-  {
-    id: 1,
-    name: 'John Smith',
-    email: 'john.smith@example.com',
-    phone: '555-123-4567',
-    service_type: 'House Cleaning',
-    experience: '5 years',
-    date_created: '2023-08-15',
-    status: 'approved',
-    description: 'Experienced house cleaner specializing in deep cleaning and organization.',
-  },
-  {
-    id: 2,
-    name: 'Maria Garcia',
-    email: 'maria.garcia@example.com',
-    phone: '555-987-6543',
-    service_type: 'House Cleaning',
-    experience: '3 years',
-    date_created: '2023-09-20',
-    status: 'pending',
-    description: 'Detail-oriented cleaner with focus on eco-friendly products and methods.',
-  },
-  {
-    id: 3,
-    name: 'Robert Johnson',
-    email: 'robert.johnson@example.com',
-    phone: '555-456-7890',
-    service_type: 'Plumbing',
-    experience: '8 years',
-    date_created: '2023-07-05',
-    status: 'approved',
-    description: 'Licensed plumber with experience in residential and commercial projects.',
-  },
-  {
-    id: 4,
-    name: 'Sarah Lee',
-    email: 'sarah.lee@example.com',
-    phone: '555-789-0123',
-    service_type: 'Electrical Work',
-    experience: '6 years',
-    date_created: '2023-10-10',
-    status: 'blocked',
-    description:
-      'Certified electrician specializing in home rewiring and smart home installations.',
-  },
-  {
-    id: 5,
-    name: 'James Wilson',
-    email: 'james.wilson@example.com',
-    phone: '555-234-5678',
-    service_type: 'Gardening',
-    experience: '4 years',
-    date_created: '2023-11-15',
-    status: 'pending',
-    description: 'Passionate gardener with expertise in sustainable garden design and maintenance.',
-  },
-])
+const adminStore = useAdminStore()
 
-// Search and filter functionality
+const professionals = ref([])
+const professionalDocuments = ref([])
+const loadingDocuments = ref(false)
+
 const searchTerm = ref('')
 const statusFilter = ref('all')
-
-// Status options for filter
 const statusOptions = [
   { value: 'all', label: 'All Professionals' },
   { value: 'pending', label: 'Pending Approval' },
@@ -76,85 +21,207 @@ const statusOptions = [
   { value: 'disapproved', label: 'Disapproved' },
 ]
 
+// Confirmation modal state
+const showConfirmModal = ref(false)
+const confirmAction = ref(() => { })
+const confirmMessage = ref('')
+
+// Rejection reason modal state
+const showRejectionModal = ref(false)
+const rejectionReason = ref('')
+const professionalToDisapprove = ref(null)
+
+// Professional details modal
+const showDetailsModal = ref(false)
+const currentProfessional = ref(null)
+
+// Fetch professionals on component mount
+onMounted(async () => {
+  try {
+    await adminStore.fetchUsers()
+    // Filter professionals and ensure we have all required fields
+    professionals.value = adminStore.professionals.map(professional => ({
+      ...professional,
+      status: professional.status || 'pending',
+      blocked: professional.blocked || false,
+      service_type: professional.service_type || 'Not specified',
+      experience: professional.experience || 'Not specified',
+      date_created: professional.date_created || 'Not available'
+    }))
+  } catch (error) {
+    console.error('Failed to load professionals:', error)
+    toastService.error('Failed to load professionals.')
+  }
+})
+
 const filteredProfessionals = computed(() => {
   return professionals.value.filter((professional) => {
-    // Apply search term filter
-    if (
-      searchTerm.value &&
-      !professional.name.toLowerCase().includes(searchTerm.value.toLowerCase()) &&
-      !professional.email.toLowerCase().includes(searchTerm.value.toLowerCase()) &&
-      !professional.service_type.toLowerCase().includes(searchTerm.value.toLowerCase())
-    ) {
-      return false
+    if (searchTerm.value) {
+      const searchLower = searchTerm.value.toLowerCase()
+      const nameMatch = professional.name?.toLowerCase().includes(searchLower)
+      const emailMatch = professional.email?.toLowerCase().includes(searchLower)
+      const serviceMatch = professional.service_type?.toLowerCase().includes(searchLower)
+
+      if (!nameMatch && !emailMatch && !serviceMatch) {
+        return false
+      }
     }
 
-    // Apply status filter
-    if (statusFilter.value !== 'all' && professional.status !== statusFilter.value) {
-      return false
+    if (statusFilter.value !== 'all') {
+      if (statusFilter.value === 'blocked' && !professional.blocked) {
+        return false
+      }
+      if (statusFilter.value !== 'blocked' && professional.status !== statusFilter.value) {
+        return false
+      }
     }
 
     return true
   })
 })
 
-// Professional details modal
-const showDetailsModal = ref(false)
-const currentProfessional = ref(null)
+// Fetch professional documents
+const fetchProfessionalDocuments = async (professionalId) => {
+  loadingDocuments.value = true
+  professionalDocuments.value = []
 
-const viewDetails = (professional) => {
-  currentProfessional.value = professional
-  showDetailsModal.value = true
-}
-
-// Reapprove a professional
-const reapproveProfessional = (professional) => {
-  const index = professionals.value.findIndex((p) => p.id === professional.id)
-  if (index !== -1) {
-    professionals.value[index] = {
-      ...professional,
-      status: 'approved',
-    }
-    toastService.success(`${professional.name} has been reapproved`)
+  try {
+    const response = await adminAPI.getUserDocuments(professionalId)
+    professionalDocuments.value = response.data
+  } catch (error) {
+    console.error('Failed to fetch documents:', error)
+    toastService.error('Failed to fetch professional documents.')
+  } finally {
+    loadingDocuments.value = false
   }
 }
 
-// Update existing functions to show toasts
-const approveProfessional = (professional) => {
-  const index = professionals.value.findIndex((p) => p.id === professional.id)
-  if (index !== -1) {
-    professionals.value[index] = {
-      ...professional,
-      status: 'approved',
-    }
-    toastService.success(`${professional.name} has been approved`)
+// View professional details
+const viewDetails = async (professional) => {
+  try {
+    await adminStore.fetchUserById(professional.id)
+    currentProfessional.value = adminStore.selectedItem
+    showDetailsModal.value = true
+
+    // Fetch documents when viewing details
+    await fetchProfessionalDocuments(professional.id)
+  } catch (error) {
+    toastService.error(error.response?.data?.message || 'Failed to fetch professional details.')
   }
 }
 
-const disapproveProfessional = (professional) => {
-  const index = professionals.value.findIndex((p) => p.id === professional.id)
-  if (index !== -1) {
-    professionals.value[index] = {
-      ...professional,
+// Get document status badge class
+const getDocumentStatusBadgeClass = (document) => {
+  if (document.verified) return 'success'
+  if (document.rejected) return 'danger'
+  return 'warning'
+}
+
+// Get document status text
+const getDocumentStatusText = (document) => {
+  if (document.verified) return 'Verified'
+  if (document.rejected) return 'Rejected'
+  return 'Pending'
+}
+
+// View document
+const viewDocument = async (document) => {
+  try {
+    toastService.info('Downloading document...')
+    const response = await adminAPI.downloadDocument(document.id)
+
+    // Create a blob from the response data
+    const blob = new Blob([response.data], {
+      type: document.file_name.toLowerCase().endsWith('.pdf') ? 'application/pdf' : 'application/octet-stream'
+    })
+    const url = window.URL.createObjectURL(blob)
+
+    // Open document in a new tab
+    window.open(url, '_blank')
+
+    // Clean up the URL object after the document is opened
+    setTimeout(() => {
+      window.URL.revokeObjectURL(url)
+    }, 100)
+  } catch (error) {
+    console.error('Failed to download document:', error)
+    toastService.error('Failed to download document')
+  }
+}
+
+// Handle professional status changes
+const handleStatusChange = async (professional, newStatus) => {
+  console.log('handleStatusChange called with:', { professional, newStatus })
+
+  if (newStatus === 'disapproved') {
+    // Show rejection reason modal
+    professionalToDisapprove.value = professional
+    rejectionReason.value = ''
+    showRejectionModal.value = true
+    return
+  }
+
+  confirmMessage.value = `Are you sure you want to ${newStatus} this professional?`
+  confirmAction.value = async () => {
+    try {
+      await adminStore.updateUserStatus(professional.id, {
+        status: newStatus,
+        blocked: professional.blocked
+      })
+      professionals.value = adminStore.professionals
+      toastService.success(`Professional ${professional.name} has been ${newStatus}.`)
+    } catch (error) {
+      console.error('Error updating status:', error)
+      toastService.error(error.response?.data?.message || `Failed to ${newStatus} professional.`)
+    }
+  }
+  showConfirmModal.value = true
+}
+
+// Submit rejection reason and disapprove professional
+const submitDisapproval = async () => {
+  try {
+    if (!professionalToDisapprove.value) return
+
+    await adminStore.updateUserStatus(professionalToDisapprove.value.id, {
       status: 'disapproved',
-    }
-    toastService.error(`${professional.name} has been disapproved`)
+      blocked: professionalToDisapprove.value.blocked,
+      rejection_reason: rejectionReason.value
+    })
+
+    professionals.value = adminStore.professionals
+    showRejectionModal.value = false
+    toastService.success(`Professional ${professionalToDisapprove.value.name} has been disapproved.`)
+  } catch (error) {
+    console.error('Error disapproving professional:', error)
+    toastService.error(error.response?.data?.message || 'Failed to disapprove professional.')
   }
 }
 
-const toggleBlockStatus = (professional) => {
-  const index = professionals.value.findIndex((p) => p.id === professional.id)
-  if (index !== -1) {
-    const newStatus = professional.status === 'blocked' ? 'approved' : 'blocked'
-    professionals.value[index] = {
-      ...professional,
-      status: newStatus,
-    }
-    if (newStatus === 'blocked') {
-      toastService.error(`${professional.name} has been blocked`)
-    } else {
-      toastService.success(`${professional.name} has been unblocked`)
+// Handle professional block status
+const toggleBlockStatus = async (professional) => {
+  const newStatus = professional.blocked ? 'unblock' : 'block'
+  confirmMessage.value = `Are you sure you want to ${newStatus} this professional?`
+  confirmAction.value = async () => {
+    try {
+      await adminStore.updateUserStatus(professional.id, {
+        blocked: !professional.blocked,
+        status: professional.status
+      })
+      professionals.value = adminStore.professionals
+      toastService.success(`Professional ${professional.name} has been ${newStatus}ed.`)
+    } catch (error) {
+      console.error('Error updating block status:', error)
+      toastService.error(error.response?.data?.message || `Failed to ${newStatus} professional.`)
     }
   }
+  showConfirmModal.value = true
+}
+
+// Handle confirmation
+const executeConfirmAction = () => {
+  confirmAction.value()
+  showConfirmModal.value = false
 }
 
 // Helper function to get status badge class
@@ -172,6 +239,12 @@ const getStatusBadgeClass = (status) => {
       return 'secondary'
   }
 }
+
+// Get profile image URL helper function
+const getProfileImageUrl = (filename) => {
+  return filename ? professionalAPI.getProfilePictureUrl(filename) : 'https://avatar.iran.liara.run/public/11'
+}
+console.log(professionals)
 </script>
 
 <template>
@@ -184,7 +257,8 @@ const getStatusBadgeClass = (status) => {
         <NeoInput v-model="searchTerm" placeholder="Search professionals..." label="Search" />
       </div>
       <div class="col-md-6">
-        <NeoSelect v-model="statusFilter" :options="statusOptions" label="Filter by Status" />
+        <NeoSelect v-model="statusFilter" :options="statusOptions" :model-value="statusFilter"
+          label="Filter by Status" />
       </div>
     </div>
 
@@ -196,8 +270,9 @@ const getStatusBadgeClass = (status) => {
         <table class="table table-hover">
           <thead>
             <tr>
-              <th>ID</th>
+              <th>Profile</th>
               <th>Name</th>
+              <th>Email</th>
               <th>Service Type</th>
               <th>Experience</th>
               <th>Date Joined</th>
@@ -207,60 +282,45 @@ const getStatusBadgeClass = (status) => {
           </thead>
           <tbody>
             <tr v-for="professional in filteredProfessionals" :key="professional.id">
-              <td>{{ professional.id }}</td>
+              <td>
+                <img :src="getProfileImageUrl(professional.profile_image)" alt="Profile" class="rounded-circle"
+                  style="width: 40px; height: 40px; object-fit: cover;" />
+              </td>
               <td>{{ professional.name }}</td>
+              <td>{{ professional.email }}</td>
               <td>{{ professional.service_type }}</td>
               <td>{{ professional.experience }}</td>
               <td>{{ professional.date_created }}</td>
               <td>
-                <NeoBadge :variant="getStatusBadgeClass(professional.status)">
-                  {{ professional.status.charAt(0).toUpperCase() + professional.status.slice(1) }}
+                <NeoBadge :variant="getStatusBadgeClass(professional.blocked ? 'blocked' : professional.status)">
+                  {{ professional.blocked ? 'blocked' : professional.status }}
                 </NeoBadge>
               </td>
               <td>
                 <NeoButton variant="info" size="sm" @click="viewDetails(professional)" class="me-1">
-                  <i class="bi bi-eye"></i>
+                  <NeoIcon name="eye" size="16" />
                 </NeoButton>
 
-                <NeoButton
-                  v-if="professional.status === 'pending'"
-                  variant="success"
-                  size="sm"
-                  @click="approveProfessional(professional)"
-                  class="me-1"
-                >
-                  <i class="bi bi-check-lg"></i>
+                <NeoButton v-if="professional.status === 'pending'" variant="success" size="sm"
+                  @click="handleStatusChange(professional, 'approved')" class="me-1">
+                  <NeoIcon name="check" size="16" />
                 </NeoButton>
-                <NeoButton
-                  v-if="professional.status === 'pending'"
-                  variant="danger"
-                  size="sm"
-                  @click="disapproveProfessional(professional)"
-                  class="me-1"
-                >
-                  <i class="bi bi-x-lg"></i>
+                <NeoButton v-if="professional.status === 'pending'" variant="danger" size="sm"
+                  @click="handleStatusChange(professional, 'disapproved')" class="me-1">
+                  <NeoIcon name="x" size="16" />
                 </NeoButton>
-                <NeoButton
-                  v-if="professional.status === 'disapproved'"
-                  variant="success"
-                  size="sm"
-                  @click="reapproveProfessional(professional)"
-                  class="me-1"
-                >
-                  <i class="bi bi-check-lg"></i>
+                <NeoButton v-if="professional.status === 'disapproved'" variant="success" size="sm"
+                  @click="handleStatusChange(professional, 'approved')" class="me-1">
+                  <NeoIcon name="check" size="16" />
                 </NeoButton>
-
-                <NeoButton
-                  :variant="professional.status === 'blocked' ? 'warning' : 'danger'"
-                  size="sm"
-                  @click="toggleBlockStatus(professional)"
-                >
-                  <i :class="professional.status === 'blocked' ? 'bi bi-unlock' : 'bi bi-lock'"></i>
+                <NeoButton :variant="professional.blocked ? 'success' : 'danger'" size="sm"
+                  @click="toggleBlockStatus(professional)">
+                  <NeoIcon :name="professional.blocked ? 'unlock' : 'lock'" size="16" />
                 </NeoButton>
               </td>
             </tr>
             <tr v-if="filteredProfessionals.length === 0">
-              <td colspan="7" class="text-center">No professionals found</td>
+              <td colspan="8" class="text-center">No professionals found</td>
             </tr>
           </tbody>
         </table>
@@ -286,40 +346,49 @@ const getStatusBadgeClass = (status) => {
               }}
             </NeoBadge>
           </p>
+          <div v-if="currentProfessional.status === 'disapproved' && currentProfessional.rejection_reason"
+            class="mt-3 p-3 border border-danger bg-light">
+            <h6 class="text-danger">Rejection Reason:</h6>
+            <p class="mb-0">{{ currentProfessional.rejection_reason }}</p>
+          </div>
         </div>
         <div class="col-md-6">
           <h5>About</h5>
           <p>{{ currentProfessional.description }}</p>
 
           <h5 class="mt-4">Verification Documents</h5>
-          <div class="d-flex gap-2 mb-3">
-            <div class="border p-2 text-center">
-              <i class="bi bi-file-earmark-text display-4"></i>
-              <p class="mb-0">ID Proof</p>
+          <div v-if="loadingDocuments" class="text-center py-4">
+            <div class="spinner-border" role="status">
+              <span class="visually-hidden">Loading...</span>
             </div>
-            <div class="border p-2 text-center">
-              <i class="bi bi-file-earmark-text display-4"></i>
-              <p class="mb-0">Certificate</p>
-            </div>
-            <div class="border p-2 text-center">
-              <i class="bi bi-file-earmark-text display-4"></i>
-              <p class="mb-0">Address Proof</p>
-            </div>
+            <p class="mt-2">Loading documents...</p>
           </div>
 
-          <h5 class="mt-4">Recent Service History</h5>
-          <div class="list-group">
-            <div class="list-group-item d-flex justify-content-between align-items-center">
-              Service #1245
-              <NeoBadge variant="success" size="sm">Completed</NeoBadge>
-            </div>
-            <div class="list-group-item d-flex justify-content-between align-items-center">
-              Service #1189
-              <NeoBadge variant="success" size="sm">Completed</NeoBadge>
-            </div>
-            <div class="list-group-item d-flex justify-content-between align-items-center">
-              Service #1023
-              <NeoBadge variant="success" size="sm">Completed</NeoBadge>
+          <div v-else-if="professionalDocuments.length === 0" class="text-center py-4">
+            <p class="mb-0">No documents uploaded yet</p>
+          </div>
+
+          <div v-else>
+            <div v-for="doc in professionalDocuments" :key="doc.id" class="mb-3">
+              <div class="border border-dark border-3 p-3 bg-light">
+                <div class="d-flex justify-content-between align-items-center mb-2">
+                  <h6 class="mb-0 text-uppercase">{{ doc.document_type }}</h6>
+                  <NeoBadge :variant="getDocumentStatusBadgeClass(doc)">
+                    {{ getDocumentStatusText(doc) }}
+                  </NeoBadge>
+                </div>
+                <p class="mb-2">{{ doc.file_name }}</p>
+                <div class="d-flex justify-content-between align-items-center">
+                  <small class="text-muted">
+                    Uploaded: {{ new Date(doc.upload_date).toLocaleDateString() }}
+                  </small>
+                  <div>
+                    <NeoButton variant="primary" size="sm" @click="viewDocument(doc)">
+                      View Document
+                    </NeoButton>
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
         </div>
@@ -330,51 +399,58 @@ const getStatusBadgeClass = (status) => {
 
         <template v-if="currentProfessional">
           <template v-if="currentProfessional.status === 'pending'">
-            <NeoButton
-              variant="success"
-              @click="approveProfessional(currentProfessional)"
-              class="ms-2"
-            >
+            <NeoButton variant="success" @click="handleStatusChange(currentProfessional, 'approved')" class="ms-2">
               Approve Professional
             </NeoButton>
-            <NeoButton
-              variant="danger"
-              @click="disapproveProfessional(currentProfessional)"
-              class="ms-2"
-            >
+            <NeoButton variant="danger" @click="handleStatusChange(currentProfessional, 'disapproved')" class="ms-2">
               Disapprove Professional
             </NeoButton>
           </template>
 
           <template v-if="currentProfessional.status === 'disapproved'">
-            <NeoButton
-              variant="success"
-              @click="reapproveProfessional(currentProfessional)"
-              class="ms-2"
-            >
+            <NeoButton variant="success" @click="handleStatusChange(currentProfessional, 'approved')" class="ms-2">
               Reapprove Professional
             </NeoButton>
           </template>
 
-          <template
-            v-if="
-              currentProfessional.status !== 'pending' &&
-              currentProfessional.status !== 'disapproved'
-            "
-          >
-            <NeoButton
-              :variant="currentProfessional.status === 'blocked' ? 'warning' : 'danger'"
-              @click="toggleBlockStatus(currentProfessional)"
-              class="ms-2"
-            >
+          <template v-if="
+            currentProfessional.status !== 'pending' &&
+            currentProfessional.status !== 'disapproved'
+          ">
+            <NeoButton :variant="currentProfessional.blocked ? 'success' : 'danger'"
+              @click="toggleBlockStatus(currentProfessional)" class="ms-2">
               {{
-                currentProfessional.status === 'blocked'
+                currentProfessional.blocked
                   ? 'Unblock Professional'
                   : 'Block Professional'
               }}
             </NeoButton>
           </template>
         </template>
+      </template>
+    </NeoModal>
+
+    <!-- Confirmation Modal -->
+    <NeoModal v-model="showConfirmModal" title="Confirm Action">
+      <NeoAlert variant="warning" class="mb-3">
+        {{ confirmMessage }}
+      </NeoAlert>
+      <template #footer>
+        <NeoButton variant="secondary" @click="showConfirmModal = false">Cancel</NeoButton>
+        <NeoButton variant="primary" @click="executeConfirmAction" class="ms-2">
+          Confirm
+        </NeoButton>
+      </template>
+    </NeoModal>
+
+    <!-- Rejection Reason Modal -->
+    <NeoModal v-model="showRejectionModal" title="Rejection Reason">
+      <NeoInput v-model="rejectionReason" placeholder="Enter rejection reason" label="Reason" />
+      <template #footer>
+        <NeoButton variant="secondary" @click="showRejectionModal = false">Cancel</NeoButton>
+        <NeoButton variant="primary" @click="submitDisapproval" class="ms-2">
+          Submit
+        </NeoButton>
       </template>
     </NeoModal>
   </div>

@@ -1,6 +1,7 @@
 <script setup>
 import { computed } from 'vue'
 import { useRouter } from 'vue-router'
+import { NeoIcon } from '@/components/ui'
 
 // Use destructuring to make it clear props are being used
 const { menuItems, title } = defineProps({
@@ -53,23 +54,13 @@ const handleItemClick = (item) => {
       <div v-if="title" class="sidebar-title">{{ title }}</div>
       <ul class="nav flex-column">
         <li v-for="item in menuItems" :key="item.route" class="nav-item">
-          <router-link
-            v-if="!item.action"
-            :to="item.route"
-            class="nav-link"
-            :class="{ active: isActive(item) }"
-          >
-            <i v-if="item.icon" :class="item.icon + ' me-2'"></i>
+          <router-link v-if="!item.action" :to="item.route" class="nav-link" :class="{ active: isActive(item) }">
+            <NeoIcon v-if="item.icon" :name="item.icon" size="20" class="me-2" />
             <span>{{ item.label }}</span>
           </router-link>
-          <a
-            v-else
-            href="#"
-            @click.prevent="handleItemClick(item)"
-            class="nav-link"
-            :class="{ 'text-danger': item.label === 'Logout' }"
-          >
-            <i v-if="item.icon" :class="item.icon + ' me-2'"></i>
+          <a v-else href="#" @click.prevent="handleItemClick(item)" class="nav-link"
+            :class="{ 'text-danger': item.label === 'Logout' }">
+            <NeoIcon v-if="item.icon" :name="item.icon" size="20" class="me-2" />
             <span>{{ item.label }}</span>
           </a>
         </li>
@@ -84,7 +75,8 @@ const handleItemClick = (item) => {
   font-family: 'Inter', sans-serif;
   width: 100%;
   border-right: 4px solid #000000;
-  min-height: 100vh;
+  height: 100vh;
+  overflow-y: hidden;
 }
 
 .sidebar-title {
@@ -106,14 +98,14 @@ const handleItemClick = (item) => {
 .nav-link {
   font-weight: 700;
   color: #333;
-
   padding: 5px 20px;
   margin: 4px 0;
   transition: all 0.2s ease;
   letter-spacing: 0.5px;
   font-size: 1.2rem;
   border: 2px solid transparent;
-  display: block;
+  display: flex;
+  align-items: center;
   text-decoration: none;
 }
 

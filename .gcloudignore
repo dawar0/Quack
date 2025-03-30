@@ -1,0 +1,27 @@
+# Exclude Git-related files
+.git
+.gitignore
+
+# Exclude local development files
+docker-compose.yml
+backend/Dockerfile
+frontend/Dockerfile
+backend/.venv
+frontend/node_modules
+frontend/dist
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+*.so
+*.dylib
+*.egg
+*.egg-info
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Keep the deployment files
+!deployment/

@@ -1,5 +1,6 @@
 import { createRouter, createWebHistory } from 'vue-router'
 import HomeView from '../views/HomeView.vue'
+import { useAuthStore } from '@/stores/auth'
 
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
@@ -18,6 +19,21 @@ const router = createRouter({
       path: '/register',
       name: 'register',
       component: () => import('../views/auth/RegisterView.vue'),
+    },
+    {
+      path: '/blocked',
+      name: 'blocked',
+      component: () => import('../views/auth/BlockedView.vue'),
+    },
+    {
+      path: '/pending-approval',
+      name: 'pending-approval',
+      component: () => import('../views/auth/PendingApprovalView.vue'),
+    },
+    {
+      path: '/disapproved',
+      name: 'disapproved',
+      component: () => import('../views/auth/DisapprovedView.vue'),
     },
     // Admin routes
     {
@@ -92,15 +108,44 @@ const router = createRouter({
 // Navigation guard to check authentication and role
 router.beforeEach((to, from, next) => {
   const requiresAuth = to.matched.some((record) => record.meta.requiresAuth)
-  const role = to.matched.find((record) => record.meta.role)?.meta.role
+  const role = to.meta.role
 
-  // This will need to be implemented with actual auth logic
-  const isAuthenticated = localStorage.getItem('token') !== null
-  const userRole = localStorage.getItem('role')
+  const authStore = useAuthStore()
+  const isAuthenticated = authStore.isAuthenticated
+  const userRoles = authStore.user?.roles
+  const isBlocked = authStore.user?.blocked
+
+  // Check if professional is pending approval or has been disapproved
+  const isProfessionalPending =
+    userRoles?.map((r) => r.name).includes('professional') && authStore.user?.status === 'pending'
+
+  const isProfessionalDisapproved =
+    userRoles?.map((r) => r.name).includes('professional') &&
+    authStore.user?.status === 'disapproved'
+
+  console.log(authStore.user)
+
+  // If user is blocked and trying to access any protected route, redirect to blocked page
+  if (isBlocked && requiresAuth) {
+    next('/blocked')
+    return
+  }
+
+  // If professional is pending approval and trying to access professional dashboard, redirect to pending approval page
+  if (isProfessionalPending && to.path.startsWith('/professional')) {
+    next('/pending-approval')
+    return
+  }
+
+  // If professional is disapproved and trying to access professional dashboard, redirect to disapproved page
+  if (isProfessionalDisapproved && to.path.startsWith('/professional')) {
+    next('/disapproved')
+    return
+  }
 
   if (requiresAuth && !isAuthenticated) {
     next('/login')
-  } else if (role && role !== userRole) {
+  } else if (role && !userRoles.map((r) => r.name).includes(role)) {
     next('/')
   } else {
     next()

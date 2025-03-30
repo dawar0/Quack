@@ -1,171 +1,175 @@
 <script setup>
-import { ref, computed } from 'vue'
-import { NeoButton, NeoCard, NeoSelect, NeoModal, NeoBadge } from '@/components/ui'
+import { ref, computed, onMounted } from 'vue'
+import { useServiceRequestStore } from '@/stores/serviceRequest'
+import { NeoButton, NeoCard, NeoSelect, NeoModal, NeoBadge, NeoAlert, NeoTabs } from '@/components/ui'
+import { toastService } from '@/services/toastService'
+import { professionalAPI } from '@/services/api'
 
-// Sample data for service requests
-const serviceRequests = ref([
-  {
-    id: 1,
-    customer_id: 1,
-    customer_name: 'Alice Johnson',
-    customer_phone: '555-123-4567',
-    customer_address: '123 Main St, Apt 4B, New York, NY 10001',
-    service_id: 1,
-    service_name: 'House Cleaning',
-    date_of_request: '2023-11-10',
-    expected_date: '2023-11-15',
-    date_of_completion: null,
-    status: 'assigned',
-    remarks: '',
-    price: 75,
-    description: 'Complete cleaning of 2BHK apartment including kitchen and bathrooms.',
-  },
-  {
-    id: 2,
-    customer_id: 2,
-    customer_name: 'Bob Smith',
-    customer_phone: '555-987-6543',
-    customer_address: '456 Park Ave, Suite 201, New York, NY 10022',
-    service_id: 1,
-    service_name: 'House Cleaning',
-    date_of_request: '2023-11-12',
-    expected_date: '2023-11-16',
-    date_of_completion: null,
-    status: 'pending',
-    remarks: '',
-    price: 85,
-    description: 'Deep cleaning of a studio apartment, including windows and balcony.',
-  },
-  {
-    id: 3,
-    customer_id: 3,
-    customer_name: 'Charlie Davis',
-    customer_phone: '555-456-7890',
-    customer_address: '789 Broadway, New York, NY 10003',
-    service_id: 1,
-    service_name: 'House Cleaning',
-    date_of_request: '2023-11-05',
-    expected_date: '2023-11-08',
-    date_of_completion: '2023-11-08',
-    status: 'completed',
-    remarks: 'Cleaned the entire apartment, including kitchen appliances and bathroom fixtures.',
-    price: 70,
-    description: 'Regular cleaning of 1BHK apartment. Please focus on kitchen and bathroom.',
-  },
-  {
-    id: 4,
-    customer_id: 4,
-    customer_name: 'Diana Wilson',
-    customer_phone: '555-789-0123',
-    customer_address: '321 5th Ave, New York, NY 10016',
-    service_id: 1,
-    service_name: 'House Cleaning',
-    date_of_request: '2023-10-28',
-    expected_date: '2023-10-30',
-    date_of_completion: null,
-    status: 'rejected',
-    remarks: 'Schedule conflict, unable to accommodate the requested date.',
-    price: 95,
-    description:
-      'Move-out cleaning for a 3BHK apartment. Need to clean carpets and windows as well.',
-  },
-])
+const serviceRequestStore = useServiceRequestStore()
+
+// State for service requests
+const serviceRequests = ref([])
+const assignedRequests = ref([])
 
 // State for selected request and completion form
 const selectedRequest = ref(null)
 const showRequestDetails = ref(false)
 const completionRemarks = ref('')
 
+// Confirmation modal state
+const showConfirmModal = ref(false)
+const confirmAction = ref(() => { })
+const confirmMessage = ref('')
+
 // Filter state
-const statusFilter = ref('all')
+const statusFilter = ref('All')
+
+// Tab state
+const activeTab = ref('available')
+
+// Define tabs for NeoTabs component
+const tabs = [
+  { value: 'available', label: 'Available Service Requests' },
+  { value: 'myRequests', label: 'My Requests' }
+]
 
 // Status options for filter
 const statusOptions = [
-  { value: 'all', label: 'All Requests' },
-  { value: 'pending', label: 'Pending' },
-  { value: 'assigned', label: 'Accepted' },
-  { value: 'completed', label: 'Completed' },
-  { value: 'rejected', label: 'Rejected' },
+  { value: 'All', label: 'All Requests' },
+  { value: 'Pending', label: 'Pending' },
+  { value: 'Accepted', label: 'Accepted' },
+  { value: 'Completed', label: 'Completed' },
+  { value: 'Cancelled', label: 'Cancelled' },
 ]
 
 // Filtered requests based on status
 const filteredRequests = computed(() => {
-  if (statusFilter.value === 'all') {
+  if (statusFilter.value.toLowerCase() === 'all') {
     return serviceRequests.value
   }
-  return serviceRequests.value.filter((request) => request.status === statusFilter.value)
+  return serviceRequests.value.filter((request) =>
+    request.service_status.toLowerCase() === statusFilter.value.toLowerCase()
+  )
+})
+
+// Filtered assigned requests based on status
+const filteredAssignedRequests = computed(() => {
+  if (statusFilter.value.toLowerCase() === 'all') {
+    return assignedRequests.value
+  }
+  return assignedRequests.value.filter((request) =>
+    request.service_status.toLowerCase() === statusFilter.value.toLowerCase()
+  )
+})
+
+// Fetch requests on component mount
+onMounted(async () => {
+  try {
+    await Promise.all([
+      serviceRequestStore.fetchProfessionalRequests(),
+      serviceRequestStore.fetchAssignedRequests()
+    ])
+    serviceRequests.value = serviceRequestStore.professionalRequests
+    assignedRequests.value = serviceRequestStore.assignedRequests
+  } catch (error) {
+    console.error('Failed to fetch requests:', error)
+    toastService.error('Failed to load service requests.')
+  }
 })
 
 // View details of a request
-const viewRequestDetails = (request) => {
-  selectedRequest.value = request
-  completionRemarks.value = request.remarks || ''
-  showRequestDetails.value = true
+const viewRequestDetails = async (request) => {
+  try {
+    await serviceRequestStore.fetchRequestById(request.id, 'professional')
+    selectedRequest.value = serviceRequestStore.selectedRequest
+    showRequestDetails.value = true
+  } catch (error) {
+    toastService.error(error.response?.data?.message || 'Failed to fetch request details.')
+  }
 }
 
 // Accept a service request
 const acceptRequest = (requestId) => {
-  const index = serviceRequests.value.findIndex((req) => req.id === requestId)
-  if (index !== -1 && serviceRequests.value[index].status === 'pending') {
-    serviceRequests.value[index] = {
-      ...serviceRequests.value[index],
-      status: 'assigned',
-    }
-    alert('Service request accepted successfully!')
-    showRequestDetails.value = false
-  }
-}
+  confirmMessage.value = 'Are you sure you want to accept this service request?'
+  confirmAction.value = async () => {
+    try {
+      await serviceRequestStore.takeActionOnRequest({
+        request_id: requestId,
+        action: 'accept'
+      })
 
-// Reject a service request
-const rejectRequest = (requestId) => {
-  if (confirm('Are you sure you want to reject this service request?')) {
-    const index = serviceRequests.value.findIndex((req) => req.id === requestId)
-    if (index !== -1 && serviceRequests.value[index].status === 'pending') {
-      serviceRequests.value[index] = {
-        ...serviceRequests.value[index],
-        status: 'rejected',
-        remarks: 'Request rejected by professional',
-      }
-      alert('Service request rejected.')
+      // Refresh both lists
+      await Promise.all([
+        serviceRequestStore.fetchProfessionalRequests(),
+        serviceRequestStore.fetchAssignedRequests()
+      ])
+
+      serviceRequests.value = serviceRequestStore.professionalRequests
+      assignedRequests.value = serviceRequestStore.assignedRequests
+
+      toastService.success('Service request accepted successfully!')
       showRequestDetails.value = false
+    } catch (error) {
+      toastService.error(error.response?.data?.message || 'Failed to accept service request.')
     }
   }
+  showConfirmModal.value = true
 }
 
 // Mark a service request as completed
 const completeRequest = (requestId) => {
-  if (!completionRemarks.value.trim()) {
-    alert('Please provide completion remarks.')
-    return
-  }
 
-  const index = serviceRequests.value.findIndex((req) => req.id === requestId)
-  if (index !== -1 && serviceRequests.value[index].status === 'assigned') {
-    serviceRequests.value[index] = {
-      ...serviceRequests.value[index],
-      status: 'completed',
-      date_of_completion: new Date().toISOString().split('T')[0],
-      remarks: completionRemarks.value.trim(),
+  confirmMessage.value = 'Are you sure you want to mark this service as completed?'
+  confirmAction.value = async () => {
+    try {
+      await serviceRequestStore.takeActionOnRequest({
+        request_id: requestId,
+        action: 'complete',
+        remarks: completionRemarks.value.trim()
+      })
+
+      // Refresh both lists
+      await Promise.all([
+        serviceRequestStore.fetchProfessionalRequests(),
+        serviceRequestStore.fetchAssignedRequests()
+      ])
+
+      serviceRequests.value = serviceRequestStore.professionalRequests
+      assignedRequests.value = serviceRequestStore.assignedRequests
+
+      toastService.success('Service request marked as completed!')
+      showRequestDetails.value = false
+    } catch (error) {
+      toastService.error(error.response?.data?.message || 'Failed to complete service request.')
     }
-    alert('Service request marked as completed!')
-    showRequestDetails.value = false
   }
+  showConfirmModal.value = true
+}
+
+// Handle confirmation
+const executeConfirmAction = () => {
+  confirmAction.value()
+  showConfirmModal.value = false
 }
 
 // Helper function to get status badge class
 const getStatusBadgeClass = (status) => {
   switch (status) {
-    case 'pending':
+    case 'Pending':
       return 'info'
-    case 'assigned':
+    case 'Accepted':
       return 'primary'
-    case 'completed':
+    case 'Completed':
       return 'success'
-    case 'rejected':
+    case 'Cancelled':
       return 'danger'
     default:
       return 'secondary'
   }
+}
+
+const getProfileImageUrl = (filename) => {
+  return filename ? professionalAPI.getProfilePictureUrl(filename) : 'https://avatar.iran.liara.run/public/11'
 }
 </script>
 
@@ -173,131 +177,163 @@ const getStatusBadgeClass = (status) => {
   <div class="container py-4">
     <h1 class="page-title mb-4">Service Requests</h1>
 
+    <!-- Neo Brutalist Tabs -->
+    <NeoTabs v-model="activeTab" :tabs="tabs" />
+
     <!-- Status Filters -->
     <div class="mb-4">
-      <NeoSelect v-model="statusFilter" :options="statusOptions" label="Filter by Status" />
+      <NeoSelect v-model="statusFilter" :options="statusOptions" label="Filter by Status" :model-value="statusFilter" />
     </div>
 
-    <!-- Requests Table -->
-    <NeoCard>
-      <template #title>Service Requests</template>
+    <!-- Available Service Requests Tab -->
+    <div v-if="activeTab === 'available'">
+      <NeoCard>
+        <template #title>Available Service Requests</template>
 
-      <div class="table-responsive">
-        <table class="table table-hover">
-          <thead>
-            <tr>
-              <th>ID</th>
-              <th>Customer</th>
-              <th>Service</th>
-              <th>Expected Date</th>
-              <th>Status</th>
-              <th>Price</th>
-              <th>Actions</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr v-for="request in filteredRequests" :key="request.id">
-              <td># {{ request.id }}</td>
-              <td>{{ request.customer_name }}</td>
-              <td>{{ request.service_name }}</td>
-              <td>{{ request.expected_date }}</td>
-              <td>
-                <NeoBadge :variant="getStatusBadgeClass(request.status)">
-                  {{ request.status.charAt(0).toUpperCase() + request.status.slice(1) }}
-                </NeoBadge>
-              </td>
-              <td>${{ request.price }}</td>
-              <td>
-                <NeoButton
-                  variant="info"
-                  size="sm"
-                  @click="viewRequestDetails(request)"
-                  class="me-1"
-                >
-                  <i class="bi bi-eye"></i>
-                </NeoButton>
+        <div class="table-responsive">
+          <table class="table table-hover">
+            <thead>
+              <tr>
+                <th>Customer</th>
+                <th>Service</th>
+                <th>Date</th>
+                <th>Status</th>
+                <th>Price</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="request in filteredRequests" :key="request.id">
+                <td>
+                  <div class="d-flex align-items-center">
+                    <img :src="getProfileImageUrl(request.customer.profile_image)" alt="Customer"
+                      class="rounded-circle me-2" style="width: 32px; height: 32px; object-fit: cover;" />
+                    <span>{{ request.customer.name }}</span>
+                  </div>
+                </td>
+                <td>{{ request.service.name }}</td>
+                <td>{{ new Date(request.date_of_request).toLocaleDateString() }}</td>
+                <td>
+                  <NeoBadge :variant="getStatusBadgeClass(request.service_status)">
+                    {{ request.service_status }}
+                  </NeoBadge>
+                </td>
+                <td>${{ request.service.price }}</td>
+                <td>
+                  <NeoButton variant="info" size="sm" @click="viewRequestDetails(request)" class="me-1">
+                    <i class="bi bi-eye"></i>
+                  </NeoButton>
 
-                <NeoButton
-                  v-if="request.status === 'pending'"
-                  variant="success"
-                  size="sm"
-                  @click="acceptRequest(request.id)"
-                  class="me-1"
-                >
-                  <i class="bi bi-check-lg"></i>
-                </NeoButton>
+                  <NeoButton v-if="request.service_status === 'Pending'" variant="success" size="sm"
+                    @click="acceptRequest(request.id)" class="me-1">
+                    <i class="bi bi-check-lg"></i>
+                  </NeoButton>
+                </td>
+              </tr>
+              <tr v-if="filteredRequests.length === 0">
+                <td colspan="7" class="text-center">No service requests found</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </NeoCard>
+    </div>
 
-                <NeoButton
-                  v-if="request.status === 'pending'"
-                  variant="danger"
-                  size="sm"
-                  @click="rejectRequest(request.id)"
-                >
-                  <i class="bi bi-x-lg"></i>
-                </NeoButton>
-              </td>
-            </tr>
-            <tr v-if="filteredRequests.length === 0">
-              <td colspan="7" class="text-center">No service requests found</td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
-    </NeoCard>
+    <!-- My Requests Tab -->
+    <div v-if="activeTab === 'myRequests'">
+      <NeoCard>
+        <template #title>My Requests</template>
+
+        <div class="table-responsive">
+          <table class="table table-hover">
+            <thead>
+              <tr>
+                <th>Customer</th>
+                <th>Service</th>
+                <th>Date</th>
+                <th>Status</th>
+                <th>Price</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="request in filteredAssignedRequests" :key="request.id">
+                <td>
+                  <div class="d-flex align-items-center">
+                    <img :src="getProfileImageUrl(request.customer.profile_image)" alt="Customer"
+                      class="rounded-circle me-2" style="width: 32px; height: 32px; object-fit: cover;" />
+                    <span>{{ request.customer.name }}</span>
+                  </div>
+                </td>
+                <td>{{ request.service.name }}</td>
+                <td>{{ new Date(request.date_of_request).toLocaleDateString() }}</td>
+                <td>
+                  <NeoBadge :variant="getStatusBadgeClass(request.service_status)">
+                    {{ request.service_status }}
+                  </NeoBadge>
+                </td>
+                <td>${{ request.service.price }}</td>
+                <td>
+                  <NeoButton variant="info" size="sm" @click="viewRequestDetails(request)" class="me-1">
+                    <i class="bi bi-eye"></i>
+                  </NeoButton>
+
+                  <NeoButton v-if="request.service_status === 'Accepted'" variant="success" size="sm"
+                    @click="completeRequest(request.id)" class="me-1">
+                    <i class="bi bi-check-circle"></i>
+                  </NeoButton>
+                </td>
+              </tr>
+              <tr v-if="filteredAssignedRequests.length === 0">
+                <td colspan="7" class="text-center">No assigned requests found</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </NeoCard>
+    </div>
 
     <!-- Request Details Modal -->
-    <NeoModal
-      v-model="showRequestDetails"
-      :title="`Request #${selectedRequest?.id} Details`"
-      size="lg"
-    >
+    <NeoModal v-model="showRequestDetails" :title="`Request #${selectedRequest?.id} Details`" size="lg">
       <div v-if="selectedRequest" class="row">
         <div class="col-md-6">
           <h5>Customer Information</h5>
-          <p><strong>Name:</strong> {{ selectedRequest.customer_name }}</p>
-          <p><strong>Phone:</strong> {{ selectedRequest.customer_phone }}</p>
-          <p><strong>Address:</strong> {{ selectedRequest.customer_address }}</p>
+          <p><strong>Name:</strong> {{ selectedRequest.customer.name }}</p>
+          <p><strong>Phone:</strong> {{ selectedRequest.customer.phone_number }}</p>
 
           <h5 class="mt-4">Service Details</h5>
-          <p><strong>Service:</strong> {{ selectedRequest.service_name }}</p>
-          <p><strong>Price:</strong> ${{ selectedRequest.price }}</p>
-          <p><strong>Description:</strong> {{ selectedRequest.description }}</p>
+          <p><strong>Service:</strong> {{ selectedRequest.service.name }}</p>
+          <p><strong>Price:</strong> ${{ selectedRequest.service.price }}</p>
+          <p><strong>Description:</strong> {{ selectedRequest.service.description }}</p>
         </div>
 
         <div class="col-md-6">
           <h5>Schedule</h5>
-          <p><strong>Date Requested:</strong> {{ selectedRequest.date_of_request }}</p>
-          <p><strong>Expected Date:</strong> {{ selectedRequest.expected_date }}</p>
+          <p><strong>Date Requested:</strong> {{ new Date(selectedRequest.date_of_request).toLocaleDateString() }}</p>
+          <p><strong>Preferred Date:</strong> {{ new Date(selectedRequest.preferred_date).toLocaleDateString() }}</p>
 
           <div v-if="selectedRequest.date_of_completion">
-            <p><strong>Date Completed:</strong> {{ selectedRequest.date_of_completion }}</p>
+            <p><strong>Date Completed:</strong> {{ new Date(selectedRequest.date_of_completion).toLocaleDateString() }}
+            </p>
           </div>
 
           <p>
             <strong>Status:</strong>
-            <NeoBadge :variant="getStatusBadgeClass(selectedRequest.status)" class="ms-2">
-              {{ selectedRequest.status.charAt(0).toUpperCase() + selectedRequest.status.slice(1) }}
+            <NeoBadge :variant="getStatusBadgeClass(selectedRequest.service_status)" class="ms-2">
+              {{ selectedRequest.service_status.charAt(0).toUpperCase() + selectedRequest.service_status.slice(1) }}
             </NeoBadge>
           </p>
 
-          <div
-            v-if="selectedRequest.status === 'completed' || selectedRequest.status === 'rejected'"
-          >
+          <div>
             <h5 class="mt-4">Remarks</h5>
             <p>{{ selectedRequest.remarks }}</p>
           </div>
 
-          <div v-if="selectedRequest.status === 'assigned'" class="mt-4">
-            <h5>Complete Service</h5>
+          <div v-if="selectedRequest.service_status === 'Accepted'">
+            <h5 class="mt-4">Completion Form</h5>
             <div class="mb-3">
-              <label for="completion-remarks" class="form-label">Completion Remarks</label>
-              <textarea
-                id="completion-remarks"
-                v-model="completionRemarks"
-                class="form-control"
-                rows="3"
-                placeholder="Describe what was done"
-              ></textarea>
+              <label for="completionRemarks" class="form-label">Completion Remarks</label>
+              <textarea id="completionRemarks" v-model="completionRemarks" class="form-control" rows="3"></textarea>
             </div>
           </div>
         </div>
@@ -306,22 +342,28 @@ const getStatusBadgeClass = (status) => {
       <template #footer>
         <NeoButton variant="secondary" @click="showRequestDetails = false">Close</NeoButton>
 
-        <template v-if="selectedRequest && selectedRequest.status === 'pending'">
+        <template v-if="selectedRequest && activeTab === 'available' && selectedRequest.service_status === 'Pending'">
           <NeoButton variant="success" @click="acceptRequest(selectedRequest.id)" class="ms-2">
             Accept Request
           </NeoButton>
-          <NeoButton variant="danger" @click="rejectRequest(selectedRequest.id)" class="ms-2">
-            Reject Request
-          </NeoButton>
         </template>
 
-        <NeoButton
-          v-if="selectedRequest && selectedRequest.status === 'assigned'"
-          variant="success"
-          @click="completeRequest(selectedRequest.id)"
-          class="ms-2"
-        >
+        <NeoButton v-if="selectedRequest && selectedRequest.service_status === 'Accepted'" variant="success"
+          @click="completeRequest(selectedRequest.id)" class="ms-2">
           Mark as Completed
+        </NeoButton>
+      </template>
+    </NeoModal>
+
+    <!-- Confirmation Modal -->
+    <NeoModal v-model="showConfirmModal" title="Confirm Action">
+      <NeoAlert variant="warning" class="mb-3">
+        {{ confirmMessage }}
+      </NeoAlert>
+      <template #footer>
+        <NeoButton variant="secondary" @click="showConfirmModal = false">Cancel</NeoButton>
+        <NeoButton variant="primary" @click="executeConfirmAction" class="ms-2">
+          Confirm
         </NeoButton>
       </template>
     </NeoModal>

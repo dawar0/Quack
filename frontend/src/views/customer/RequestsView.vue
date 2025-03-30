@@ -1,6 +1,8 @@
 <script setup>
 import { ref, computed, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
+import { useServiceRequestStore } from '@/stores/serviceRequest'
+import { useServiceStore } from '@/stores/service'
 import {
   NeoButton,
   NeoCard,
@@ -9,88 +11,28 @@ import {
   NeoModal,
   NeoBadge,
   NeoAlert,
+  NeoIcon,
+  NeoTextarea,
 } from '@/components/ui'
+import { toastService } from '@/services/toastService'
+import { serviceRequestAPI } from '@/services/api'
+
 
 const route = useRoute()
+const serviceRequestStore = useServiceRequestStore()
+const serviceStore = useServiceStore()
 
-// Sample data for service requests
-const serviceRequests = ref([
-  {
-    id: 1,
-    service_id: 1,
-    service_name: 'House Cleaning',
-    professional_id: 1,
-    professional_name: 'John Smith',
-    date_of_request: '2023-11-10',
-    expected_date: '2023-11-15',
-    date_of_completion: null,
-    status: 'assigned',
-    remarks: '',
-    price: 75,
-    description: 'Complete cleaning of 2BHK apartment including kitchen and bathrooms.',
-  },
-  {
-    id: 2,
-    service_id: 3,
-    service_name: 'Electrical Work',
-    professional_id: 4,
-    professional_name: 'Sarah Lee',
-    date_of_request: '2023-11-05',
-    expected_date: '2023-11-08',
-    date_of_completion: '2023-11-08',
-    status: 'completed',
-    remarks: 'Fixed wiring issues in kitchen and installed new light fixtures in living room.',
-    price: 150,
-    description: 'Need to fix some wiring issues in the kitchen and install new light fixtures.',
-  },
-  {
-    id: 3,
-    service_id: 2,
-    service_name: 'Plumbing',
-    professional_id: 3,
-    professional_name: 'Robert Johnson',
-    date_of_request: '2023-10-25',
-    expected_date: '2023-10-28',
-    date_of_completion: '2023-10-28',
-    status: 'closed',
-    remarks: 'Fixed leaking pipe under sink and installed new faucet in bathroom.',
-    price: 120,
-    description:
-      'Leaking pipe under the sink needs fixing. Also need to install a new faucet in the bathroom.',
-  },
-  {
-    id: 4,
-    service_id: 4,
-    service_name: 'Gardening',
-    professional_id: null,
-    professional_name: null,
-    date_of_request: '2023-11-12',
-    expected_date: '2023-11-18',
-    date_of_completion: null,
-    status: 'requested',
-    remarks: '',
-    price: 90,
-    description:
-      'Need full garden maintenance including mowing, trimming, and planting new seasonal flowers.',
-  },
-])
-
-// Sample data for available services
-const services = ref([
-  { id: 1, name: 'House Cleaning', price: 75 },
-  { id: 2, name: 'Plumbing', price: 120 },
-  { id: 3, name: 'Electrical Work', price: 150 },
-  { id: 4, name: 'Gardening', price: 90 },
-  { id: 5, name: 'Painting', price: 200 },
-  { id: 6, name: 'Carpet Cleaning', price: 85 },
-])
+// State for service requests
+const serviceRequests = ref([])
+const services = ref([])
 
 // State for new request form
 const showNewRequestForm = ref(false)
 const newRequest = ref({
   service_id: '',
-  expected_date: '',
-  description: '',
+  preferred_date: '',
+  location_pin_code: '',
+  remarks: '',
 })
 
 // State for request details modal
@@ -105,7 +47,7 @@ const feedbackVariant = ref('info')
 
 // Confirmation modal state
 const showConfirmModal = ref(false)
-const confirmAction = ref(() => {})
+const confirmAction = ref(() => { })
 const confirmMessage = ref('')
 
 // Filter state
@@ -114,10 +56,9 @@ const statusFilter = ref('all')
 // Status options for filter
 const statusOptions = [
   { value: 'all', label: 'All Requests' },
-  { value: 'requested', label: 'Requested' },
-  { value: 'assigned', label: 'Assigned' },
+  { value: 'pending', label: 'Pending' },
+  { value: 'accepted', label: 'Accepted' },
   { value: 'completed', label: 'Completed' },
-  { value: 'closed', label: 'Closed' },
 ]
 
 // Filtered requests based on status
@@ -125,58 +66,103 @@ const filteredRequests = computed(() => {
   if (statusFilter.value === 'all') {
     return serviceRequests.value
   }
-  return serviceRequests.value.filter((request) => request.status === statusFilter.value)
+  return serviceRequests.value.filter((request) => request.service_status &&
+    request.service_status.toLowerCase() === statusFilter.value.toLowerCase())
+})
+
+// Helper function to format service request data
+const formatServiceRequests = (requests) => {
+  return requests.map(request => {
+    // Format dates for display
+    const formattedRequest = { ...request };
+
+    // Format date of request
+    if (formattedRequest.date_of_request) {
+      formattedRequest.date_of_request = new Date(formattedRequest.date_of_request).toLocaleDateString();
+    }
+
+    // Format date of completion
+    if (formattedRequest.date_of_completion) {
+      formattedRequest.date_of_completion = new Date(formattedRequest.date_of_completion).toLocaleDateString();
+    }
+
+    // Format preferred date
+    if (formattedRequest.preferred_date) {
+      formattedRequest.expected_date = new Date(formattedRequest.preferred_date).toLocaleDateString();
+    }
+
+    // Extract service details
+    if (formattedRequest.service) {
+      formattedRequest.service_name = formattedRequest.service.name;
+      formattedRequest.price = formattedRequest.service.price;
+      formattedRequest.description = formattedRequest.service.description;
+    }
+
+    // Extract professional name if available
+    if (formattedRequest.professional) {
+      formattedRequest.professional_name = formattedRequest.professional.name;
+    }
+
+    return formattedRequest;
+  });
+};
+
+// Fetch services and requests on component mount
+onMounted(async () => {
+  try {
+    await Promise.all([
+      serviceStore.fetchServices(),
+      serviceRequestStore.fetchCustomerRequests()
+    ])
+    services.value = serviceStore.services
+
+    // Process service requests data
+    serviceRequests.value = formatServiceRequests(serviceRequestStore.customerRequests);
+  } catch (error) {
+    console.error('Error loading data:', error);
+    showFeedback('Error', 'Failed to load services and requests.', 'danger')
+    toastService.error('Failed to load services and requests.')
+  }
 })
 
 // Create a new service request
-const createServiceRequest = () => {
+const createServiceRequest = async () => {
   // Validate form
-  if (
-    !newRequest.value.service_id ||
-    !newRequest.value.expected_date ||
-    !newRequest.value.description
-  ) {
+  if (!newRequest.value.service_id || !newRequest.value.preferred_date) {
     showFeedback('Error', 'Please fill in all required fields.', 'danger')
+    toastService.error('Please fill in all required fields.')
     return
   }
 
-  // Get service details
-  const service = services.value.find(
-    (s) => s.id === Number.parseInt(newRequest.value.service_id, 10),
-  )
-  if (!service) {
-    showFeedback('Error', 'Invalid service selected.', 'danger')
-    return
+  try {
+    await serviceRequestStore.createServiceRequest({
+      service_id: Number(newRequest.value.service_id),
+      preferred_date: newRequest.value.preferred_date,
+      location_pin_code: newRequest.value.location_pin_code,
+      remarks: newRequest.value.remarks
+    })
+
+    // Get updated service requests from store
+    await serviceRequestStore.fetchCustomerRequests()
+
+    // Process service requests data
+    serviceRequests.value = formatServiceRequests(serviceRequestStore.customerRequests);
+
+    // Reset form and close modal
+    newRequest.value = {
+      service_id: '',
+      preferred_date: '',
+      location_pin_code: '',
+      remarks: ''
+    }
+    showNewRequestForm.value = false
+
+    toastService.success('Service request created successfully!')
+  } catch (error) {
+    console.error('Error creating request:', error);
+    showFeedback('Error', error.response?.data?.message || 'Failed to create service request.', 'danger')
+    toastService.error(error.response?.data?.message || 'Failed to create service request.')
   }
-
-  // Create request
-  const newId = Math.max(0, ...serviceRequests.value.map((r) => r.id)) + 1
-  const newServiceRequest = {
-    id: newId,
-    service_id: Number.parseInt(newRequest.value.service_id, 10),
-    service_name: service.name,
-    professional_id: null,
-    professional_name: null,
-    date_of_request: new Date().toISOString().split('T')[0],
-    expected_date: newRequest.value.expected_date,
-    date_of_completion: null,
-    status: 'requested',
-    remarks: '',
-    price: service.price,
-    description: newRequest.value.description,
-  }
-
-  serviceRequests.value.push(newServiceRequest)
-
-  // Reset form and close modal
-  newRequest.value = {
-    service_id: '',
-    expected_date: '',
-    description: '',
-  }
-  showNewRequestForm.value = false
-
-  showFeedback('Success', 'Service request created successfully!', 'success')
 }
 
 // Helper function to show feedback modal
@@ -188,33 +174,57 @@ const showFeedback = (title, message, variant = 'info') => {
 }
 
 // View details of a request
-const viewRequestDetails = (request) => {
-  selectedRequest.value = request
-  showRequestDetails.value = true
-}
+const viewRequestDetails = async (request) => {
+  try {
+    await serviceRequestStore.fetchCustomerRequestById(request.id)
+    const currentRequest = serviceRequestStore.currentRequest;
 
-// Close a completed service
-const closeServiceRequest = (requestId) => {
-  const index = serviceRequests.value.findIndex((req) => req.id === requestId)
-  if (index !== -1 && serviceRequests.value[index].status === 'completed') {
-    serviceRequests.value[index] = {
-      ...serviceRequests.value[index],
-      status: 'closed',
-    }
-    showFeedback('Success', 'Service request marked as closed.', 'success')
-    showRequestDetails.value = false
+    // Format the request details for display
+    selectedRequest.value = {
+      ...currentRequest,
+      date_of_request: currentRequest.date_of_request ?
+        new Date(currentRequest.date_of_request).toLocaleDateString() : '',
+      date_of_completion: currentRequest.date_of_completion ?
+        new Date(currentRequest.date_of_completion).toLocaleDateString() : '',
+      expected_date: currentRequest.preferred_date ?
+        new Date(currentRequest.preferred_date).toLocaleDateString() : '',
+      service_name: currentRequest.service?.name || '',
+      price: currentRequest.service?.price || 0,
+      description: currentRequest.service?.description || '',
+      professional_name: currentRequest.professional?.name || ''
+    };
+
+    showRequestDetails.value = true
+  } catch (error) {
+    console.error('Error fetching request details:', error);
+    showFeedback('Error', error.response?.data?.message || 'Failed to fetch request details.', 'danger')
+    toastService.error(error.response?.data?.message || 'Failed to fetch request details.')
   }
 }
 
 // Cancel a service request
 const cancelServiceRequest = (requestId) => {
   confirmMessage.value = 'Are you sure you want to cancel this service request?'
-  confirmAction.value = () => {
-    const index = serviceRequests.value.findIndex((req) => req.id === requestId)
-    if (index !== -1 && ['requested', 'assigned'].includes(serviceRequests.value[index].status)) {
-      serviceRequests.value.splice(index, 1)
+  confirmAction.value = async () => {
+    try {
+      await serviceRequestAPI.cancelRequest({
+        request_id: requestId,
+        action: 'cancel'
+      })
+
+      // Refresh the service requests
+      await serviceRequestStore.fetchCustomerRequests()
+
+      // Process service requests data
+      serviceRequests.value = formatServiceRequests(serviceRequestStore.customerRequests);
+
       showFeedback('Success', 'Service request cancelled successfully.', 'success')
+      toastService.success('Service request cancelled successfully.')
       showRequestDetails.value = false
+    } catch (error) {
+      console.error('Error cancelling request:', error);
+      showFeedback('Error', error.response?.data?.message || 'Failed to cancel service request.', 'danger')
+      toastService.error(error.response?.data?.message || 'Failed to cancel service request.')
     }
   }
   showConfirmModal.value = true
@@ -222,15 +232,14 @@ const cancelServiceRequest = (requestId) => {
 
 // Helper function to get status badge class
 const getStatusBadgeClass = (status) => {
-  switch (status) {
-    case 'requested':
+  const normalizedStatus = status ? status.toLowerCase() : '';
+  switch (normalizedStatus) {
+    case 'accepted':
       return 'info'
-    case 'assigned':
+    case 'pending':
       return 'primary'
     case 'completed':
       return 'success'
-    case 'closed':
-      return 'secondary'
     case 'cancelled':
       return 'danger'
     default:
@@ -246,8 +255,19 @@ const minDate = () => {
 
 // Handle confirmation
 const executeConfirmAction = () => {
-  confirmAction.value()
-  showConfirmModal.value = false
+  try {
+    if (typeof confirmAction.value === 'function') {
+      confirmAction.value()
+    } else {
+      console.error('confirmAction is not a function', confirmAction.value)
+      showFeedback('Error', 'An error occurred processing your request', 'danger')
+    }
+  } catch (error) {
+    console.error('Error in executeConfirmAction:', error)
+    showFeedback('Error', 'An error occurred processing your request', 'danger')
+  } finally {
+    showConfirmModal.value = false
+  }
 }
 
 // Check for query parameter on mount
@@ -263,7 +283,8 @@ onMounted(() => {
     <div class="d-flex justify-content-between align-items-center mb-4">
       <h1 class="page-title">My Service Requests</h1>
       <NeoButton @click="showNewRequestForm = true" variant="primary">
-        <i class="bi bi-plus-circle me-2"></i> New Service Request
+        <NeoIcon name="plus-circle" size="20" class="me-2" />
+        New Service Request
       </NeoButton>
     </div>
 
@@ -278,8 +299,9 @@ onMounted(() => {
         <NeoCard>
           <template #title>
             {{ request.service_name }}
-            <NeoBadge :variant="getStatusBadgeClass(request.status)" class="ms-2">
-              {{ request.status.charAt(0).toUpperCase() + request.status.slice(1) }}
+            <NeoBadge :variant="getStatusBadgeClass(request.service_status)" class="ms-2">
+              {{ request.service_status ? request.service_status.charAt(0).toUpperCase() +
+                request.service_status.slice(1) : 'Unknown' }}
             </NeoBadge>
           </template>
 
@@ -298,17 +320,16 @@ onMounted(() => {
           </div>
 
           <div class="d-flex justify-content-between">
-            <NeoButton @click="viewRequestDetails(request)" variant="info" size="sm">
-              <i class="bi bi-eye me-1"></i> View Details
+            <NeoButton variant="primary" size="sm" @click="viewRequestDetails(request)">
+              <NeoIcon name="eye" size="16" class="me-1" />
+              View Details
             </NeoButton>
 
-            <NeoButton
-              v-if="['requested', 'assigned'].includes(request.status)"
-              @click="cancelServiceRequest(request.id)"
-              variant="danger"
-              size="sm"
-            >
-              <i class="bi bi-x-circle me-1"></i> Cancel Request
+            <NeoButton v-if="request.service_status &&
+              ['pending'].includes(request.service_status.toLowerCase())" @click="cancelServiceRequest(request.id)"
+              variant="danger" size="sm">
+              <NeoIcon name="x-circle" size="16" class="me-1" />
+              Cancel Request
             </NeoButton>
           </div>
         </NeoCard>
@@ -322,50 +343,34 @@ onMounted(() => {
     <!-- New Request Modal -->
     <NeoModal v-model="showNewRequestForm" title="New Service Request">
       <div class="mb-3">
-        <NeoSelect
-          v-model="newRequest.service_id"
-          :options="services.map((s) => ({ value: s.id, label: `${s.name} ($${s.price})` }))"
-          label="Select Service"
-          required
-        />
+        <NeoSelect v-model="newRequest.service_id"
+          :options="services.map((s) => ({ value: s.id, label: `${s.name} ($${s.price})` }))" label="Select Service"
+          required />
       </div>
 
       <div class="mb-3">
-        <NeoInput
-          v-model="newRequest.expected_date"
-          type="date"
-          label="Expected Date"
-          :min="minDate()"
-          required
-        />
+        <NeoInput v-model="newRequest.preferred_date" type="date" label="Preferred Date" :min="minDate()" required />
       </div>
 
       <div class="mb-3">
-        <label for="description" class="form-label">Description</label>
-        <textarea
-          id="description"
-          v-model="newRequest.description"
-          class="form-control"
-          rows="3"
-          placeholder="Describe what you need"
-          required
-        ></textarea>
+        <label for="location_pin_code" class="form-label">Location Pin Code</label>
+        <NeoInput id="location_pin_code" v-model="newRequest.location_pin_code" placeholder="Enter location pin code"
+          required />
+      </div>
+
+      <div class="mb-3">
+        <label for="remarks" class="form-label">Remarks</label>
+        <NeoTextarea id="remarks" v-model="newRequest.remarks" rows="3" placeholder="Enter remarks" required />
       </div>
 
       <template #footer>
         <NeoButton variant="secondary" @click="showNewRequestForm = false">Cancel</NeoButton>
-        <NeoButton variant="primary" @click="createServiceRequest" class="ms-2"
-          >Submit Request</NeoButton
-        >
+        <NeoButton variant="primary" @click="createServiceRequest" class="ms-2">Submit Request</NeoButton>
       </template>
     </NeoModal>
 
     <!-- Request Details Modal -->
-    <NeoModal
-      v-model="showRequestDetails"
-      :title="`Request #${selectedRequest?.id} Details`"
-      size="lg"
-    >
+    <NeoModal v-model="showRequestDetails" :title="`Request #${selectedRequest?.id} Details`" size="lg">
       <div v-if="selectedRequest" class="row">
         <div class="col-md-6">
           <h5>Service Information</h5>
@@ -380,8 +385,10 @@ onMounted(() => {
 
           <p>
             <strong>Status:</strong>
-            <NeoBadge :variant="getStatusBadgeClass(selectedRequest.status)" class="ms-2">
-              {{ selectedRequest.status.charAt(0).toUpperCase() + selectedRequest.status.slice(1) }}
+            <NeoBadge :variant="getStatusBadgeClass(selectedRequest.service_status)" class="ms-2">
+              {{ selectedRequest.service_status ? selectedRequest.service_status.charAt(0).toUpperCase() +
+                selectedRequest.service_status.slice(1) :
+                'Unknown' }}
             </NeoBadge>
           </p>
         </div>
@@ -395,7 +402,7 @@ onMounted(() => {
             <p><strong>Name:</strong> {{ selectedRequest.professional_name }}</p>
           </div>
 
-          <div v-if="selectedRequest.status === 'completed' || selectedRequest.status === 'closed'">
+          <div v-if="selectedRequest.service_status === 'completed'">
             <h5 class="mt-4">Service Remarks</h5>
             <p>{{ selectedRequest.remarks }}</p>
           </div>
@@ -405,21 +412,9 @@ onMounted(() => {
       <template #footer>
         <NeoButton variant="secondary" @click="showRequestDetails = false">Close</NeoButton>
 
-        <NeoButton
-          v-if="selectedRequest && selectedRequest.status === 'completed'"
-          variant="success"
-          @click="closeServiceRequest(selectedRequest.id)"
-          class="ms-2"
-        >
-          Mark as Closed
-        </NeoButton>
-
-        <NeoButton
-          v-if="selectedRequest && ['requested', 'assigned'].includes(selectedRequest.status)"
-          variant="danger"
-          @click="cancelServiceRequest(selectedRequest.id)"
-          class="ms-2"
-        >
+        <NeoButton v-if="selectedRequest && selectedRequest.service_status &&
+          ['requested', 'assigned'].includes(selectedRequest.service_status.toLowerCase())" variant="danger"
+          @click="cancelServiceRequest(selectedRequest.id)" class="ms-2">
           Cancel Request
         </NeoButton>
       </template>

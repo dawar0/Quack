@@ -1,32 +1,97 @@
 <script setup>
-import { ref } from 'vue'
+import { ref, onMounted } from 'vue'
+import { useAuthStore } from '@/stores/auth'
+import { professionalAPI } from '@/services/api'
+import { toastService } from '@/services/toastService'
 import NeoButton from '@/components/ui/NeoButton.vue'
 import NeoCard from '@/components/ui/NeoCard.vue'
 import NeoInput from '@/components/ui/NeoInput.vue'
-import NeoBadge from '@/components/ui/NeoBadge.vue'
+import NeoIcon from '@/components/ui/NeoIcon.vue'
 
-// Sample professional data (would come from API in real implementation)
+const authStore = useAuthStore()
+
+// Professional data from auth store
 const professionalData = ref({
-  id: 'P1001',
-  name: 'Mike Smith',
-  email: 'mike.smith@example.com',
-  phone: '+91 9876543210',
-  address: '456 Park Avenue, Mumbai, Maharashtra, 400001',
-  joinDate: '2023-02-10',
-  profileImage: 'https://randomuser.me/api/portraits/men/41.jpg',
-  serviceType: 'Plumbing',
-  experience: '8 years',
-  hourlyRate: '₹500',
-  description:
-    'Experienced plumber with expertise in residential and commercial plumbing services. Specialized in fixing leaks, installing new plumbing systems, and handling emergency repairs.',
-  status: 'Approved',
-  rating: 4.8,
-  completedJobs: 37,
+  id: '',
+  name: '',
+  email: '',
+  phone: '',
+  joinDate: '',
+  profileImage: '',
+  serviceType: '',
+  experience: '',
+  description: '',
+  status: '',
+  rating: 0,
+  completedJobs: 0,
 })
+
+// Document management
+const documents = ref([])
 
 // Edit mode state
 const isEditMode = ref(false)
 const editableUserData = ref({ ...professionalData.value })
+
+// Change password
+const currentPassword = ref('')
+const newPassword = ref('')
+const confirmPassword = ref('')
+const showPasswordForm = ref(false)
+
+// File input reference
+const profilePictureInput = ref(null)
+
+// Helper function to show feedback using toast service
+const showFeedback = (title, message, variant = 'info') => {
+  // Map variant to toast type
+  const typeMap = {
+    'success': 'success',
+    'danger': 'error',
+    'warning': 'warning',
+    'info': 'info'
+  }
+  const type = typeMap[variant] || 'info'
+
+  // Show toast with appropriate type
+  toastService[type](`${title}: ${message}`)
+}
+
+// Initialize professional data from auth store
+const initializeData = () => {
+  const user = authStore.user
+  if (user) {
+    // For debugging - log the profile image data
+    console.log('Profile image from server:', user.profile_image)
+
+    let profileImageUrl = 'https://avatar.iran.liara.run/public/11' // Default fallback
+
+    if (user.profile_image) {
+      try {
+        profileImageUrl = professionalAPI.getProfilePictureUrl(user.profile_image)
+        console.log('Constructed profile image URL:', profileImageUrl)
+      } catch (error) {
+        console.error('Error creating profile image URL:', error)
+      }
+    }
+
+    professionalData.value = {
+      id: user.id,
+      name: user.name || '',
+      email: user.email || '',
+      phone: user.phone_number || '',
+      joinDate: user.date_created || '',
+      profileImage: profileImageUrl,
+      serviceType: user.service_type || '',
+      experience: user.experience || '',
+      description: user.description || '',
+      status: user.status || '',
+      rating: user.rating || 0,
+      completedJobs: user.completed_jobs || 0,
+    }
+    editableUserData.value = { ...professionalData.value }
+  }
+}
 
 // Toggle edit mode
 const toggleEditMode = () => {
@@ -38,20 +103,28 @@ const toggleEditMode = () => {
 }
 
 // Save user data changes
-const saveUserData = () => {
-  // In a real application, this would call an API to update user data
-  professionalData.value = { ...editableUserData.value }
-  isEditMode.value = false
+const saveUserData = async () => {
+  try {
+    await professionalAPI.updateProfile({
+      name: editableUserData.value.name,
+      phone_number: editableUserData.value.phone,
+      experience: editableUserData.value.experience,
+      description: editableUserData.value.description,
+    })
 
-  // Show success message (would use a toast/notification in real app)
-  alert('Profile updated successfully')
+    // Update local data
+    professionalData.value = { ...editableUserData.value }
+    isEditMode.value = false
+
+    // Refresh user data in auth store
+    await authStore.fetchUser()
+
+    showFeedback('Success', 'Profile updated successfully', 'success')
+  } catch (error) {
+    console.error('Failed to update profile:', error)
+    showFeedback('Error', error.response?.data?.message || 'Failed to update profile', 'danger')
+  }
 }
-
-// Change password
-const currentPassword = ref('')
-const newPassword = ref('')
-const confirmPassword = ref('')
-const showPasswordForm = ref(false)
 
 // Toggle password form visibility
 const togglePasswordForm = () => {
@@ -66,42 +139,109 @@ const togglePasswordForm = () => {
 }
 
 // Change password functionality
-const changePassword = () => {
+const changePassword = async () => {
   // Validation
   if (!currentPassword.value || !newPassword.value || !confirmPassword.value) {
-    alert('Please fill all password fields')
+    showFeedback('Error', 'Please fill all password fields', 'danger')
     return
   }
 
   if (newPassword.value !== confirmPassword.value) {
-    alert('New password and confirmation do not match')
+    showFeedback('Error', 'New password and confirmation do not match', 'danger')
     return
   }
 
   if (newPassword.value.length < 8) {
-    alert('New password must be at least 8 characters long')
+    showFeedback('Error', 'New password must be at least 8 characters long', 'danger')
     return
   }
 
-  // In a real application, this would call an API to change the password
-  alert('Password changed successfully')
+  try {
+    await professionalAPI.changePassword({
+      current_password: currentPassword.value,
+      new_password: newPassword.value,
+    })
 
-  // Reset form and hide it
-  currentPassword.value = ''
-  newPassword.value = ''
-  confirmPassword.value = ''
-  showPasswordForm.value = false
-}
+    // Reset form and hide it
+    currentPassword.value = ''
+    newPassword.value = ''
+    confirmPassword.value = ''
+    showPasswordForm.value = false
 
-// Get status badge variant
-const getStatusBadgeVariant = (status) => {
-  const statusVariants = {
-    Approved: 'success',
-    Pending: 'warning',
-    Blocked: 'danger',
+    showFeedback('Success', 'Password changed successfully', 'success')
+  } catch (error) {
+    console.error('Failed to change password:', error)
+    showFeedback('Error', error.response?.data?.message || 'Failed to change password', 'danger')
   }
-  return statusVariants[status] || 'secondary'
 }
+
+// Handle profile picture change
+const handleProfilePictureChange = async (event) => {
+  const file = event.target.files[0]
+  if (!file) return
+
+  try {
+    const formData = new FormData()
+    formData.append('profile_picture', file)
+
+    await professionalAPI.updateProfilePicture(formData)
+
+    // Refresh user data in auth store
+    await authStore.fetchUser()
+    // Reinitialize with updated profile image
+    initializeData()
+
+    showFeedback('Success', 'Profile picture updated successfully', 'success')
+  } catch (error) {
+    console.error('Failed to update profile picture:', error)
+    showFeedback('Error', error.response?.data?.message || 'Failed to update profile picture', 'danger')
+  }
+}
+
+// Download document
+const downloadDocument = async (doc) => {
+  try {
+    const response = await professionalAPI.downloadDocument(doc.id)
+
+    // Create a blob from the response data
+    const blob = new Blob([response.data], { type: response.headers['content-type'] })
+
+    // Create a download link and trigger it
+    const url = window.URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = url
+    link.setAttribute('download', doc.file_name)
+    document.body.appendChild(link)
+    link.click()
+
+    // Clean up
+    window.URL.revokeObjectURL(url)
+    link.remove()
+
+    showFeedback('Success', 'Document download started', 'success')
+  } catch (error) {
+    console.error('Failed to download document:', error)
+    showFeedback('Error', 'Failed to download document', 'danger')
+  }
+}
+
+// Document management functions
+const loadDocuments = async () => {
+  try {
+    const response = await professionalAPI.getDocuments()
+    documents.value = response.data
+  } catch (error) {
+    console.error('Failed to load documents:', error)
+    showFeedback('Error', 'Failed to load documents', 'danger')
+  }
+}
+
+
+// Initialize data on component mount
+onMounted(() => {
+  initializeData()
+  loadDocuments()
+})
 </script>
 
 <template>
@@ -117,6 +257,7 @@ const getStatusBadgeVariant = (status) => {
             <div class="d-flex justify-content-between align-items-center">
               <h5 class="mb-0 fw-bold text-uppercase">Profile Information</h5>
               <NeoButton :variant="isEditMode ? 'dark' : 'success'" @click="toggleEditMode">
+                <NeoIcon :name="isEditMode ? 'x' : 'edit'" size="16" class="me-1" />
                 {{ isEditMode ? 'Cancel' : 'Edit Profile' }}
               </NeoButton>
             </div>
@@ -160,17 +301,6 @@ const getStatusBadgeVariant = (status) => {
             <div class="mb-4 p-3 bg-light border border-dark border-3">
               <div class="row mb-3">
                 <div class="col-sm-3">
-                  <p class="mb-0 fw-bold text-uppercase">Address</p>
-                </div>
-                <div class="col-sm-9">
-                  <p class="mb-0">{{ professionalData.address }}</p>
-                </div>
-              </div>
-            </div>
-
-            <div class="mb-4 p-3 bg-light border border-dark border-3">
-              <div class="row mb-3">
-                <div class="col-sm-3">
                   <p class="mb-0 fw-bold text-uppercase">Service Type</p>
                 </div>
                 <div class="col-sm-9">
@@ -193,17 +323,6 @@ const getStatusBadgeVariant = (status) => {
             <div class="mb-4 p-3 bg-light border border-dark border-3">
               <div class="row mb-3">
                 <div class="col-sm-3">
-                  <p class="mb-0 fw-bold text-uppercase">Hourly Rate</p>
-                </div>
-                <div class="col-sm-9">
-                  <p class="mb-0">{{ professionalData.hourlyRate }}</p>
-                </div>
-              </div>
-            </div>
-
-            <div class="mb-4 p-3 bg-light border border-dark border-3">
-              <div class="row mb-3">
-                <div class="col-sm-3">
                   <p class="mb-0 fw-bold text-uppercase">Description</p>
                 </div>
                 <div class="col-sm-9">
@@ -212,82 +331,24 @@ const getStatusBadgeVariant = (status) => {
               </div>
             </div>
 
-            <div class="p-3 bg-light border border-dark border-3">
-              <div class="row">
-                <div class="col-sm-3">
-                  <p class="mb-0 fw-bold text-uppercase">Status</p>
-                </div>
-                <div class="col-sm-9">
-                  <NeoBadge :variant="getStatusBadgeVariant(professionalData.status)">
-                    {{ professionalData.status }}
-                  </NeoBadge>
-                </div>
-              </div>
-            </div>
           </div>
 
           <!-- Edit Mode -->
           <form v-else>
-            <NeoInput
-              label="Name"
-              id="name"
-              v-model="editableUserData.name"
-              variant="primary"
-              class="mb-3"
-            />
+            <NeoInput label="Name" id="name" v-model="editableUserData.name" variant="primary" class="mb-3" />
 
-            <NeoInput
-              label="Email"
-              id="email"
-              type="email"
-              v-model="editableUserData.email"
-              variant="primary"
-              class="mb-3"
-            />
+            <NeoInput label="Phone" id="phone" type="tel" v-model="editableUserData.phone" variant="primary"
+              class="mb-3" />
 
-            <NeoInput
-              label="Phone"
-              id="phone"
-              type="tel"
-              v-model="editableUserData.phone"
-              variant="primary"
-              class="mb-3"
-            />
+            <NeoInput label="Experience" id="experience" v-model="editableUserData.experience" variant="primary"
+              class="mb-3" />
 
-            <NeoInput
-              label="Address"
-              id="address"
-              v-model="editableUserData.address"
-              variant="primary"
-              class="mb-3"
-            />
-
-            <NeoInput
-              label="Experience"
-              id="experience"
-              v-model="editableUserData.experience"
-              variant="primary"
-              class="mb-3"
-            />
-
-            <NeoInput
-              label="Hourly Rate"
-              id="hourlyRate"
-              v-model="editableUserData.hourlyRate"
-              variant="primary"
-              class="mb-3"
-            />
-
-            <NeoInput
-              label="Description"
-              id="description"
-              v-model="editableUserData.description"
-              variant="primary"
-              class="mb-4"
-            />
+            <NeoInput label="Description" id="description" v-model="editableUserData.description" variant="primary"
+              class="mb-4" />
 
             <div class="d-grid">
               <NeoButton variant="success" size="lg" @click="saveUserData">
+                <NeoIcon name="save" size="16" class="me-1" />
                 Save Changes
               </NeoButton>
             </div>
@@ -300,25 +361,22 @@ const getStatusBadgeVariant = (status) => {
         <!-- Profile Picture Card -->
         <NeoCard class="mb-4" variant="success">
           <div class="text-center py-4">
-            <img
-              :src="professionalData.profileImage"
-              alt="Profile picture"
+            <img :src="`${professionalData.profileImage}?timestamp=${Date.now()}`" alt="Profile picture"
               class="rounded-circle img-fluid mb-3 border border-dark border-3"
-              style="width: 150px; height: 150px; object-fit: cover"
-            />
+              style="width: 150px; height: 150px; object-fit: cover" />
             <h5 class="mb-0 fw-bold text-uppercase">{{ professionalData.name }}</h5>
             <p class="mb-2 fw-bold">
               {{ professionalData.serviceType }}
             </p>
-            <div class="d-flex justify-content-center gap-2 mb-3">
-              <NeoBadge variant="primary">
-                {{ professionalData.completedJobs }} Jobs Completed
-              </NeoBadge>
-              <NeoBadge :variant="getStatusBadgeVariant(professionalData.status)">
-                {{ professionalData.status }}
-              </NeoBadge>
+
+            <div class="position-relative d-inline-block">
+              <input type="file" accept="image/*" class="d-none" ref="profilePictureInput"
+                @change="handleProfilePictureChange" />
+              <NeoButton variant="dark" @click="profilePictureInput.click()">
+                <NeoIcon name="camera" size="16" class="me-1" />
+                Change Picture
+              </NeoButton>
             </div>
-            <NeoButton variant="dark">Change Picture</NeoButton>
           </div>
         </NeoCard>
 
@@ -329,85 +387,64 @@ const getStatusBadgeVariant = (status) => {
           </template>
 
           <NeoButton variant="dark" class="w-100 mb-3" @click="togglePasswordForm">
+            <NeoIcon name="lock" size="16" class="me-1" />
             Change Password
           </NeoButton>
 
           <!-- Change Password Form -->
           <form v-if="showPasswordForm" class="mt-3">
-            <NeoInput
-              label="Current Password"
-              id="currentPassword"
-              type="password"
-              v-model="currentPassword"
-              placeholder="Enter current password"
-              variant="danger"
-              class="mb-3"
-            />
+            <NeoInput label="Current Password" id="currentPassword" type="password" v-model="currentPassword"
+              placeholder="Enter current password" variant="danger" class="mb-3" />
 
-            <NeoInput
-              label="New Password"
-              id="newPassword"
-              type="password"
-              v-model="newPassword"
-              placeholder="Enter new password"
-              variant="danger"
-              class="mb-3"
-            />
+            <NeoInput label="New Password" id="newPassword" type="password" v-model="newPassword"
+              placeholder="Enter new password" variant="danger" class="mb-3" />
 
-            <NeoInput
-              label="Confirm New Password"
-              id="confirmPassword"
-              type="password"
-              v-model="confirmPassword"
-              placeholder="Confirm new password"
-              variant="danger"
-              class="mb-3"
-            />
+            <NeoInput label="Confirm New Password" id="confirmPassword" type="password" v-model="confirmPassword"
+              placeholder="Confirm new password" variant="danger" class="mb-3" />
 
             <div class="d-grid">
-              <NeoButton variant="success" @click="changePassword"> Update Password </NeoButton>
+              <NeoButton variant="success" @click="changePassword">
+                <NeoIcon name="check" size="16" class="me-1" />
+                Update Password
+              </NeoButton>
             </div>
           </form>
         </NeoCard>
 
-        <!-- Stats Card -->
-        <NeoCard variant="primary">
+        <!-- Documents Card -->
+        <NeoCard class="mb-4" variant="warning">
           <template #header>
-            <h5 class="mb-0 fw-bold text-uppercase">Stats</h5>
+            <div class="d-flex justify-content-between align-items-center">
+              <h5 class="mb-0 fw-bold text-uppercase">Documents</h5>
+            </div>
           </template>
 
-          <div class="border border-dark border-3 mb-3">
-            <div class="d-flex justify-content-between p-3 bg-light fw-bold">
-              <span class="text-uppercase">Total Jobs</span>
-              <span>{{ professionalData.completedJobs }}</span>
-            </div>
+          <div v-if="documents.length === 0" class="text-center py-4">
+            <p class="mb-0">No documents uploaded yet</p>
           </div>
 
-          <div class="border border-dark border-3 mb-3">
-            <div class="d-flex justify-content-between p-3 bg-light fw-bold">
-              <span class="text-uppercase">Rating</span>
-              <span class="text-warning">
-                <i class="fas fa-star"></i> {{ professionalData.rating }}
-              </span>
-            </div>
-          </div>
-
-          <div class="border border-dark border-3 mb-3">
-            <div class="d-flex justify-content-between p-3 bg-light fw-bold">
-              <span class="text-uppercase">Member Since</span>
-              <span>{{ professionalData.joinDate }}</span>
-            </div>
-          </div>
-
-          <div class="border border-dark border-3">
-            <div class="d-flex justify-content-between p-3 bg-light fw-bold">
-              <span class="text-uppercase">Status</span>
-              <NeoBadge :variant="getStatusBadgeVariant(professionalData.status)">
-                {{ professionalData.status }}
-              </NeoBadge>
+          <div v-else>
+            <div v-for="doc in documents" :key="doc.id" class="mb-3">
+              <div class="border border-dark border-3 p-3 bg-light">
+                <div class="d-flex justify-content-between align-items-center mb-2">
+                  <h6 class="mb-0 text-uppercase">{{ doc.document_type }}</h6>
+                </div>
+                <p class="mb-2">{{ doc.file_name }}</p>
+                <div class="d-flex justify-content-between align-items-center">
+                  <small class="text-muted">
+                    Uploaded: {{ new Date(doc.upload_date).toLocaleDateString() }}
+                  </small>
+                  <NeoButton variant="primary" size="sm" @click="downloadDocument(doc)">
+                    <NeoIcon name="download" size="14" class="me-1" />
+                    Download
+                  </NeoButton>
+                </div>
+              </div>
             </div>
           </div>
         </NeoCard>
+
+
       </div>
     </div>
   </div>
@@ -447,15 +484,15 @@ const getStatusBadgeVariant = (status) => {
   border-spacing: 0;
 }
 
-.table > :not(caption) > * > * {
+.table> :not(caption)>*>* {
   padding: 0.75rem;
 }
 
-.table > thead {
+.table>thead {
   vertical-align: bottom;
 }
 
-.table > thead th {
+.table>thead th {
   font-weight: bold;
   letter-spacing: 1px;
 }

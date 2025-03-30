@@ -1,54 +1,14 @@
 <script setup>
-import { ref, computed } from 'vue'
-import { NeoButton, NeoCard, NeoInput, NeoModal } from '@/components/ui'
+import { ref, computed, onMounted } from 'vue'
+import { useServiceStore } from '@/stores/service'
+import { NeoButton, NeoCard, NeoInput, NeoModal, NeoAlert, NeoTextarea, NeoIcon } from '@/components/ui'
+import { toastService } from '@/services/toastService'
 
-// Sample service data - in a real app, this would come from an API
-const services = ref([
-  {
-    id: 1,
-    name: 'House Cleaning',
-    price: 75,
-    time_required: '2 hours',
-    description:
-      'Complete house cleaning service including dusting, mopping, and bathroom cleaning.',
-  },
-  {
-    id: 2,
-    name: 'Plumbing',
-    price: 120,
-    time_required: '1-3 hours',
-    description: 'Professional plumbing services for repairs, installations, and maintenance.',
-  },
-  {
-    id: 3,
-    name: 'Electrical Work',
-    price: 150,
-    time_required: '2-4 hours',
-    description:
-      'Licensed electricians for all your electrical needs, from repairs to installations.',
-  },
-  {
-    id: 4,
-    name: 'Gardening',
-    price: 90,
-    time_required: '3 hours',
-    description: 'Complete garden maintenance including mowing, trimming, and planting.',
-  },
-  {
-    id: 5,
-    name: 'Painting',
-    price: 200,
-    time_required: '5-8 hours',
-    description: 'Professional painting services for interior and exterior surfaces.',
-  },
-  {
-    id: 6,
-    name: 'Carpet Cleaning',
-    price: 85,
-    time_required: '2 hours',
-    description: 'Deep carpet cleaning to remove stains, dirt, and allergens.',
-  },
-])
+const serviceStore = useServiceStore()
+
+// State for services
+const services = ref([])
+const isLoading = ref(false)
 
 // Form state for adding/editing a service
 const formMode = ref('add') // 'add' or 'edit'
@@ -61,16 +21,35 @@ const currentService = ref({
   description: '',
 })
 
+// Confirmation modal state
+const showConfirmModal = ref(false)
+const confirmAction = ref(() => { })
+const confirmMessage = ref('')
+
 // Search functionality
 const searchTerm = ref('')
-const filteredServices = computed(() => {
-  if (!searchTerm.value) return services.value
 
-  const term = searchTerm.value.toLowerCase()
-  return services.value.filter(
-    (service) =>
-      service.name.toLowerCase().includes(term) || service.description.toLowerCase().includes(term),
-  )
+// Fetch services on component mount
+onMounted(async () => {
+  try {
+    isLoading.value = true
+    await serviceStore.fetchServices()
+    services.value = serviceStore.services
+  } catch (error) {
+    console.error('Failed to fetch services:', error)
+    toastService.error('Failed to load services.')
+  } finally {
+    isLoading.value = false
+  }
+})
+
+// Filter services based on search term
+const filteredServices = computed(() => {
+  return services.value.filter(service => {
+    return !searchTerm.value ||
+      service.name.toLowerCase().includes(searchTerm.value.toLowerCase()) ||
+      service.description.toLowerCase().includes(searchTerm.value.toLowerCase())
+  })
 })
 
 // Start adding a new service
@@ -94,43 +73,68 @@ const editService = (service) => {
 }
 
 // Save the current service (add or update)
-const saveService = () => {
+const saveService = async () => {
   // Validate form
   if (
     !currentService.value.name ||
     !currentService.value.price ||
     !currentService.value.time_required
   ) {
-    alert('Please fill in all required fields')
+    toastService.error('Please fill in all required fields.')
     return
   }
 
-  if (formMode.value === 'add') {
-    // Create new service
-    const newId = Math.max(0, ...services.value.map((s) => s.id)) + 1
-    services.value.push({
-      ...currentService.value,
-      id: newId,
-    })
-    alert('Service created successfully!')
-  } else {
-    // Update existing service
-    const index = services.value.findIndex((s) => s.id === currentService.value.id)
-    if (index !== -1) {
-      services.value[index] = { ...currentService.value }
-      alert('Service updated successfully!')
+  try {
+    if (formMode.value === 'add') {
+      // Create new service
+      await serviceStore.createService({
+        name: currentService.value.name,
+        price: Number(currentService.value.price),
+        time_required: currentService.value.time_required,
+        description: currentService.value.description
+      })
+      toastService.success('Service created successfully!')
+    } else {
+      // Update existing service
+      await serviceStore.updateService(currentService.value.id, {
+        name: currentService.value.name,
+        price: Number(currentService.value.price),
+        time_required: currentService.value.time_required,
+        description: currentService.value.description
+      })
+      toastService.success('Service updated successfully!')
     }
+    services.value = serviceStore.services
+    showForm.value = false
+  } catch (error) {
+    toastService.error(error.response?.data?.message || 'Failed to save service.')
   }
-
-  showForm.value = false
 }
 
 // Delete a service
 const deleteService = (id) => {
-  if (confirm('Are you sure you want to delete this service?')) {
-    services.value = services.value.filter((service) => service.id !== id)
-    alert('Service deleted successfully!')
+  confirmMessage.value = 'Are you sure you want to delete this service?'
+  confirmAction.value = async () => {
+    try {
+      const success = await serviceStore.deleteService(id)
+      if (success) {
+        services.value = serviceStore.services
+        toastService.success('Service deleted successfully!')
+      } else {
+        toastService.error(serviceStore.error || 'Failed to delete service.')
+      }
+    } catch (error) {
+      console.error('Failed to delete service:', error)
+      toastService.error(serviceStore.error || 'Failed to delete service.')
+    }
   }
+  showConfirmModal.value = true
+}
+
+// Handle confirmation
+const executeConfirmAction = () => {
+  confirmAction.value()
+  showConfirmModal.value = false
 }
 </script>
 
@@ -139,7 +143,8 @@ const deleteService = (id) => {
     <div class="d-flex justify-content-between align-items-center mb-2">
       <h1 class="page-title">Management</h1>
       <NeoButton @click="addService" variant="primary">
-        <i class="bi bi-plus-circle me-2"></i> Add New Service
+        <NeoIcon name="plus-circle" size="20" class="me-2" />
+        Add New Service
       </NeoButton>
     </div>
 
@@ -156,7 +161,6 @@ const deleteService = (id) => {
         <table class="table table-hover">
           <thead>
             <tr>
-              <th>ID</th>
               <th>Name</th>
               <th>Price</th>
               <th>Time Required</th>
@@ -166,7 +170,6 @@ const deleteService = (id) => {
           </thead>
           <tbody>
             <tr v-for="service in filteredServices" :key="service.id">
-              <td>{{ service.id }}</td>
               <td>{{ service.name }}</td>
               <td>${{ service.price }}</td>
               <td>{{ service.time_required }}</td>
@@ -179,10 +182,10 @@ const deleteService = (id) => {
               </td>
               <td>
                 <NeoButton variant="info" size="sm" @click="editService(service)" class="me-1">
-                  <i class="bi bi-pencil"></i>
+                  <NeoIcon name="pencil" size="16" />
                 </NeoButton>
                 <NeoButton variant="danger" size="sm" @click="deleteService(service.id)">
-                  <i class="bi bi-trash"></i>
+                  <NeoIcon name="trash" size="16" />
                 </NeoButton>
               </td>
             </tr>
@@ -197,47 +200,39 @@ const deleteService = (id) => {
     <!-- Add/Edit Service Modal -->
     <NeoModal v-model="showForm" :title="formMode === 'add' ? 'Add New Service' : 'Edit Service'">
       <div class="mb-3">
-        <NeoInput
-          v-model="currentService.name"
-          label="Service Name"
-          placeholder="Enter service name"
-          required
-        />
+        <NeoInput v-model="currentService.name" label="Service Name" placeholder="Enter service name" required />
       </div>
 
       <div class="mb-3">
-        <NeoInput
-          v-model="currentService.price"
-          type="number"
-          label="Price ($)"
-          placeholder="Enter price"
-          required
-        />
+        <NeoInput v-model="currentService.price" type="number" label="Price ($)" placeholder="Enter price" required />
       </div>
 
       <div class="mb-3">
-        <NeoInput
-          v-model="currentService.time_required"
-          label="Time Required"
-          placeholder="e.g. 2 hours, 1-3 hours"
-          required
-        />
+        <NeoInput v-model="currentService.time_required" label="Time Required" placeholder="e.g. 2 hours, 1-3 hours"
+          required />
       </div>
 
       <div class="mb-3">
-        <label for="description" class="form-label">Description</label>
-        <textarea
-          id="description"
-          v-model="currentService.description"
-          class="form-control"
-          rows="3"
-          placeholder="Enter service description"
-        ></textarea>
+        <NeoTextarea v-model="currentService.description" label="Description" placeholder="Enter service description"
+          required />
       </div>
 
       <template #footer>
         <NeoButton variant="secondary" @click="showForm = false">Cancel</NeoButton>
         <NeoButton variant="primary" @click="saveService" class="ms-2">Save</NeoButton>
+      </template>
+    </NeoModal>
+
+    <!-- Confirmation Modal -->
+    <NeoModal v-model="showConfirmModal" title="Confirm Action">
+      <NeoAlert variant="warning" class="mb-3">
+        {{ confirmMessage }}
+      </NeoAlert>
+      <template #footer>
+        <NeoButton variant="secondary" @click="showConfirmModal = false">Cancel</NeoButton>
+        <NeoButton variant="primary" @click="executeConfirmAction" class="ms-2">
+          Confirm
+        </NeoButton>
       </template>
     </NeoModal>
   </div>

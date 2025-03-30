@@ -1,5 +1,6 @@
 <script setup>
 import { computed, ref } from 'vue'
+import * as LucideIcons from 'lucide-vue-next'
 
 const props = defineProps({
   variant: {
@@ -20,6 +21,10 @@ const props = defineProps({
     type: String,
     default: '',
   },
+  iconSize: {
+    type: Number,
+    default: 20,
+  }
 })
 
 const visible = ref(true)
@@ -52,36 +57,31 @@ const backgroundClasses = computed(() => {
   return variantMap[props.variant] || '#FF7F50'
 })
 
-const iconClasses = computed(() => {
-  if (!props.icon) return ''
+const iconComponent = computed(() => {
+  if (!props.icon) return null
 
-  return `bi bi-${props.icon} alert-icon`
+  // Convert icon name to PascalCase for Lucide component names
+  const pascalCaseName = props.icon
+    .split('-')
+    .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+    .join('')
+
+  return LucideIcons[pascalCaseName] || null
 })
 </script>
 
 <template>
-  <div
-    v-if="visible"
-    :class="alertClasses"
-    role="alert"
-    :style="{ backgroundColor: backgroundClasses }"
-  >
+  <div v-if="visible" :class="alertClasses" role="alert" :style="{ backgroundColor: backgroundClasses }">
     <div class="d-flex">
-      <div v-if="icon" class="alert-icon-wrapper me-3">
-        <i :class="iconClasses"></i>
+      <div v-if="iconComponent" class="alert-icon-wrapper me-3">
+        <component :is="iconComponent" :size="iconSize" />
       </div>
       <div>
         <h5 v-if="title" class="alert-heading">{{ title }}</h5>
         <slot></slot>
       </div>
     </div>
-    <button
-      v-if="dismissible"
-      type="button"
-      class="btn-close"
-      @click="closeAlert"
-      aria-label="Close"
-    ></button>
+    <button v-if="dismissible" type="button" class="btn-close" @click="closeAlert" aria-label="Close"></button>
   </div>
 </template>
 
@@ -117,9 +117,7 @@ const iconClasses = computed(() => {
 }
 
 .btn-close {
-  background: transparent
-    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M.293.293a1 1 0 011.414 0L8 6.586 14.293.293a1 1 0 111.414 1.414L9.414 8l6.293 6.293a1 1 0 01-1.414 1.414L8 9.414l-6.293 6.293a1 1 0 01-1.414-1.414L6.586 8 .293 1.707a1 1 0 010-1.414z'/%3E%3C/svg%3E")
-    center/1em auto no-repeat;
+  background: transparent url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M.293.293a1 1 0 011.414 0L8 6.586 14.293.293a1 1 0 111.414 1.414L9.414 8l6.293 6.293a1 1 0 01-1.414 1.414L8 9.414l-6.293 6.293a1 1 0 01-1.414-1.414L6.586 8 .293 1.707a1 1 0 010-1.414z'/%3E%3C/svg%3E") center/1em auto no-repeat;
   border: 2px solid #000;
   width: 2rem;
   height: 2rem;

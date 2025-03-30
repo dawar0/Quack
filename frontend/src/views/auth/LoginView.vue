@@ -1,47 +1,69 @@
 <script setup>
 import { ref } from 'vue'
 import { useRouter } from 'vue-router'
+import { useAuthStore } from '@/stores/auth'
 import NeoButton from '@/components/ui/NeoButton.vue'
 import NeoInput from '@/components/ui/NeoInput.vue'
 import NeoCard from '@/components/ui/NeoCard.vue'
 import NeoAlert from '@/components/ui/NeoAlert.vue'
+import { toastService } from '@/services/toastService'
 
 const router = useRouter()
+const authStore = useAuthStore()
 const email = ref('')
 const password = ref('')
-const role = ref('customer') // Default role
-const errorMessage = ref('')
-const isLoading = ref(false)
+const error = ref('')
+const loading = ref(false)
 
-const login = async () => {
-  // Basic validation
+const login = async (event) => {
+  // Ensure we prevent default
+  event.preventDefault()
+
   if (!email.value || !password.value) {
-    errorMessage.value = 'Please fill in all fields'
+    error.value = 'Please fill in all fields'
+    toastService.error('Please fill in all fields')
     return
   }
 
   try {
-    isLoading.value = true
-    errorMessage.value = ''
+    loading.value = true
+    error.value = null
+    const success = await authStore.login({
+      email: email.value,
+      password: password.value
+    })
+    if (success && authStore.user) {
+      const user = authStore.user
+      toastService.success(`Welcome back, ${user.name || 'User'}!`)
 
-    // This is a mock authentication - in a real app, this would call an API
-    // For demo purposes, we'll simulate success and store in localStorage
-    const mockToken = 'mock-jwt-token'
-    localStorage.setItem('token', mockToken)
-    localStorage.setItem('role', role.value)
-
-    // Navigate based on role
-    if (role.value === 'admin') {
-      router.push('/admin')
-    } else if (role.value === 'professional') {
-      router.push('/professional')
+      if (user.roles && user.roles.length > 0) {
+        const roleNames = user.roles.map(role => role.name)
+        if (roleNames.includes('admin')) {
+          router.push('/admin')
+        } else if (roleNames.includes('professional')) {
+          router.push('/professional')
+        } else if (roleNames.includes('customer')) {
+          router.push('/customer')
+        } else {
+          error.value = 'Invalid user role'
+          toastService.error('Invalid user role')
+          await authStore.logout()
+        }
+      } else {
+        error.value = 'User has no assigned roles'
+        toastService.error('User has no assigned roles')
+        await authStore.logout()
+      }
     } else {
-      router.push('/customer')
+      error.value = authStore.error || 'Login failed'
+      toastService.error(authStore.error || 'Login failed')
     }
-  } catch (error) {
-    errorMessage.value = error.message || 'Login failed'
+  } catch (err) {
+    console.error('Login error:', err)
+    error.value = authStore.error || err.response?.data?.message || 'An unexpected error occurred'
+    toastService.error(authStore.error || err.response?.data?.message || 'An unexpected error occurred')
   } finally {
-    isLoading.value = false
+    loading.value = false
   }
 }
 </script>
@@ -54,79 +76,21 @@ const login = async () => {
           <h2 class="text-center">LOGIN</h2>
         </template>
 
-        <NeoAlert v-if="errorMessage" variant="danger">
-          {{ errorMessage }}
+        <NeoAlert v-if="error" variant="danger">
+          {{ error }}
         </NeoAlert>
 
-        <form @submit.prevent="login" class="neo-form">
-          <NeoInput
-            id="email"
-            v-model="email"
-            type="email"
-            label="Email"
-            placeholder="Enter your email"
-            required
-            variant="primary"
-          />
+        <form @submit.prevent="login($event)" class="neo-form">
+          <NeoInput id="email" v-model="email" type="email" label="Email" placeholder="Enter your email" required
+            variant="primary" />
 
-          <NeoInput
-            id="password"
-            v-model="password"
-            type="password"
-            label="Password"
-            placeholder="Enter your password"
-            required
-            variant="primary"
-          />
-
-          <div class="mb-4">
-            <label class="neobrutalism-label">LOGIN AS</label>
-            <div class="d-flex justify-content-between neo-radio-group">
-              <div class="neo-radio">
-                <input
-                  class="neo-radio-input"
-                  type="radio"
-                  name="userRole"
-                  id="customerRole"
-                  value="customer"
-                  v-model="role"
-                />
-                <label class="neo-radio-label" for="customerRole"> Customer </label>
-              </div>
-              <div class="neo-radio">
-                <input
-                  class="neo-radio-input"
-                  type="radio"
-                  name="userRole"
-                  id="professionalRole"
-                  value="professional"
-                  v-model="role"
-                />
-                <label class="neo-radio-label" for="professionalRole"> Professional </label>
-              </div>
-              <div class="neo-radio">
-                <input
-                  class="neo-radio-input"
-                  type="radio"
-                  name="userRole"
-                  id="adminRole"
-                  value="admin"
-                  v-model="role"
-                />
-                <label class="neo-radio-label" for="adminRole"> Admin </label>
-              </div>
-            </div>
-          </div>
+          <NeoInput id="password" v-model="password" type="password" label="Password" placeholder="Enter your password"
+            required variant="primary" />
 
           <div class="d-grid gap-2">
-            <NeoButton type="submit" variant="success" size="lg" block :disabled="isLoading">
-              <span
-                v-if="isLoading"
-                class="spinner-border spinner-border-sm"
-                role="status"
-                aria-hidden="true"
-              ></span>
-              {{ isLoading ? 'LOGGING IN...' : 'LOGIN' }}
+            <NeoButton type="submit" variant="success" size="lg" block :disabled="loading">
+              <span v-if="loading" class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
+              {{ loading ? 'LOGGING IN...' : 'LOGIN' }}
             </NeoButton>
           </div>
         </form>
@@ -157,67 +121,6 @@ const login = async () => {
 
 .neo-form {
   padding: 1rem 0;
-}
-
-.neobrutalism-label {
-  font-weight: bold;
-  text-transform: uppercase;
-  font-size: 0.9rem;
-  letter-spacing: 0.5px;
-  margin-bottom: 0.5rem;
-  display: block;
-}
-
-.neo-radio-group {
-  background: #fff;
-  border: 3px solid #000;
-  padding: 1rem;
-}
-
-.neo-radio {
-  position: relative;
-  margin-right: 1rem;
-}
-
-.neo-radio-input {
-  appearance: none;
-  -webkit-appearance: none;
-  width: 1.5rem;
-  height: 1.5rem;
-  border: 3px solid #000;
-  border-radius: 0;
-  background-color: #fff;
-  margin-right: 0.5rem;
-  vertical-align: middle;
-  position: relative;
-  cursor: pointer;
-}
-
-.neo-radio-input:checked {
-  background-color: #ff7f50;
-}
-
-.neo-radio-input:checked:after {
-  content: '';
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%);
-  width: 0.5rem;
-  height: 0.5rem;
-  background-color: #000;
-}
-
-.neo-radio-input:focus {
-  box-shadow: 3px 3px 0 #000;
-  outline: none;
-}
-
-.neo-radio-label {
-  font-weight: bold;
-  cursor: pointer;
-  text-transform: uppercase;
-  font-size: 0.85rem;
 }
 
 .neo-link-container {

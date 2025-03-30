@@ -250,6 +250,48 @@ const showModal = ref(false)
 - `update:modelValue`: Emitted when modal opens or closes
 - `closed`: Emitted when modal closes
 
+## NeoIcon
+
+A component that makes it easy to use Lucide icons in your app.
+
+### Usage
+
+```vue
+<template>
+  <!-- Basic usage -->
+  <NeoIcon name="check" />
+  
+  <!-- With custom size and color -->
+  <NeoIcon name="alert-circle" size="32" color="red" />
+  
+  <!-- With predefined color variants -->
+  <NeoIcon name="info" variant="info" />
+  
+  <!-- With custom stroke width -->
+  <NeoIcon name="star" stroke-width="1.5" />
+</template>
+```
+
+### Props
+
+| Prop        | Type             | Default        | Description                        |
+|-------------|------------------|----------------|------------------------------------|
+| name        | String           | (required)     | Name of the Lucide icon to use     |
+| size        | Number or String | 24             | Size of the icon in pixels         |
+| color       | String           | 'currentColor' | Color of the icon                  |
+| strokeWidth | Number or String | 2              | Stroke width of the icon           |
+| variant     | String           | ''             | Color variant (primary, success, etc) |
+| class       | String           | ''             | Additional CSS classes to apply    |
+
+### Available Icons
+
+All icons from the Lucide icon library are available. You can find the complete list of icons at [https://lucide.dev/icons/](https://lucide.dev/icons/).
+
+When using an icon, convert the icon name to kebab-case. For example:
+- `AlertTriangle` → `alert-triangle`
+- `CheckCircle` → `check-circle`
+- `ChevronRight` → `chevron-right`
+
 ## Customization
 
 These components use Bootstrap's classes with custom Neo-Brutalist styling. You can further customize these components by modifying their styles or extending them with your own modifications.

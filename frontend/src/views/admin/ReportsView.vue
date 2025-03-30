@@ -1,7 +1,7 @@
 <script setup>
-import { ref, computed } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue'
+import { useAdminStore } from '@/stores/admin'
 import { NeoButton, NeoCard, NeoInput, NeoSelect, NeoBadge } from '@/components/ui'
-import { toastService } from '@/services/toastService'
 import { Bar } from 'vue-chartjs'
 import {
   Chart as ChartJS,
@@ -12,9 +12,13 @@ import {
   Tooltip,
   Legend,
 } from 'chart.js'
+import { professionalAPI } from '@/services/api' // Import API for profile image URLs
+import { toastService } from '@/services/toastService'
 
 // Register ChartJS components
 ChartJS.register(CategoryScale, LinearScale, BarElement, Title, Tooltip, Legend)
+
+const adminStore = useAdminStore()
 
 // Report types
 const reportTypes = [
@@ -33,41 +37,79 @@ const endDate = ref('')
 // Status of export
 const exportStatus = ref('idle') // idle, loading, success, error
 
-// Sample service request data for demonstration
-const serviceRequestData = [
-  { month: 'Jan', requested: 24, completed: 20, cancelled: 4 },
-  { month: 'Feb', requested: 32, completed: 28, cancelled: 4 },
-  { month: 'Mar', requested: 38, completed: 34, cancelled: 4 },
-  { month: 'Apr', requested: 43, completed: 38, cancelled: 5 },
-  { month: 'May', requested: 50, completed: 45, cancelled: 5 },
-  { month: 'Jun', requested: 65, completed: 60, cancelled: 5 },
-]
+// Report data
+const serviceRequestData = ref([])
+const serviceTypeData = ref([])
+
+// Recent service requests
+const recentRequests = computed(() => {
+  return adminStore.requests.slice(0, 5) // Show only the 5 most recent requests
+})
+
+// Fetch report data
+const fetchReportData = async () => {
+  try {
+    exportStatus.value = 'loading'
+    const success = await adminStore.fetchReports({
+      type: selectedReportType.value,
+      start_date: startDate.value,
+      end_date: endDate.value
+    })
+
+    if (success) {
+      // Update chart data based on report type
+      switch (selectedReportType.value) {
+        case 'service':
+          serviceRequestData.value = adminStore.reports.service_requests
+          serviceTypeData.value = adminStore.reports.service_types
+          break
+        case 'professional':
+          // Handle professional report data
+          break
+        case 'customer':
+          // Handle customer report data
+          break
+      }
+
+      // Fetch recent requests
+      await adminStore.fetchAdminRequests()
+
+      exportStatus.value = 'success'
+      toastService.success('Report data loaded successfully.')
+    } else {
+      throw new Error(adminStore.error || 'Failed to load report data')
+    }
+  } catch (error) {
+    exportStatus.value = 'error'
+    toastService.error(error.message || 'Failed to load report data.')
+  }
+}
 
 // Service Request Chart Data
 const serviceRequestChartData = computed(() => {
   return {
-    labels: serviceRequestData.map((item) => item.month),
+    labels: serviceRequestData.value.map((item) => item.month),
     datasets: [
       {
         label: 'Requested',
         backgroundColor: '#ff7f50',
         borderColor: '#000',
         borderWidth: 2,
-        data: serviceRequestData.map((item) => item.requested),
+        data: serviceRequestData.value.map((item) => item.requested),
       },
       {
         label: 'Completed',
         backgroundColor: '#00ff7f',
         borderColor: '#000',
         borderWidth: 2,
-        data: serviceRequestData.map((item) => item.completed),
+        data: serviceRequestData.value.map((item) => item.completed),
       },
       {
         label: 'Cancelled',
         backgroundColor: '#ff5555',
         borderColor: '#000',
         borderWidth: 2,
-        data: serviceRequestData.map((item) => item.cancelled),
+        data: serviceRequestData.value.map((item) => item.cancelled),
       },
     ],
   }
@@ -117,73 +159,47 @@ const chartOptions = {
   },
 }
 
-// Sample service type distribution data
-const serviceTypeData = [
-  { service: 'Plumbing', count: 75 },
-  { service: 'Electrical', count: 90 },
-  { service: 'Cleaning', count: 60 },
-  { service: 'Gardening', count: 45 },
-  { service: 'Carpentry', count: 30 },
-  { service: 'Painting', count: 50 },
-]
-
 // Service Type Chart Data
 const serviceTypeChartData = computed(() => {
   return {
-    labels: serviceTypeData.map((item) => item.service),
+    labels: serviceTypeData.value.map((item) => item.service),
     datasets: [
       {
         label: 'Service Count',
         backgroundColor: '#ffd700',
         borderColor: '#000',
         borderWidth: 2,
-        data: serviceTypeData.map((item) => item.count),
-      },
-    ],
-  }
-})
-
-// Professional Rating Chart Data
-const professionalRatingData = [
-  { rating: '5 stars', count: 15 },
-  { rating: '4 stars', count: 25 },
-  { rating: '3 stars', count: 5 },
-  { rating: '2 stars', count: 2 },
-  { rating: '1 star', count: 0 },
-]
-
-const professionalRatingChartData = computed(() => {
-  return {
-    labels: professionalRatingData.map((item) => item.rating),
-    datasets: [
-      {
-        label: 'Professionals',
-        backgroundColor: '#ffd700',
-        borderColor: '#000',
-        borderWidth: 2,
-        data: professionalRatingData.map((item) => item.count),
+        data: serviceTypeData.value.map((item) => item.count),
       },
     ],
   }
 })
 
 // Generate CSV export
-const exportReport = () => {
+const exportReport = async () => {
   if (!startDate.value || !endDate.value) {
-    toastService.error('Please select both start and end dates')
+    toastService.error('Please select both start and end dates.')
     return
   }
 
-  exportStatus.value = 'loading'
+  try {
+    exportStatus.value = 'loading'
+    const success = await adminStore.exportReport({
+      type: selectedReportType.value,
+      start_date: startDate.value,
+      end_date: endDate.value
+    })
 
-  // Simulate API call to generate report
-  setTimeout(() => {
-    exportStatus.value = 'success'
-    toastService.success('Report generated successfully!')
-
-    // In a real application, this would trigger a backend job through API
-    // and then notify when the report is ready
-  }, 2000)
+    if (success) {
+      exportStatus.value = 'success'
+      toastService.success('Report exported successfully!')
+    } else {
+      throw new Error(adminStore.error || 'Failed to export report')
+    }
+  } catch (error) {
+    exportStatus.value = 'error'
+    toastService.error(error.message || 'Failed to export report.')
+  }
 }
 
 // Set default date range to last 30 days
@@ -196,8 +212,45 @@ const setDefaultDateRange = () => {
   startDate.value = start.toISOString().split('T')[0]
 }
 
-// Initialize with default date range
-setDefaultDateRange()
+// Initialize with default date range and fetch data
+onMounted(() => {
+  setDefaultDateRange()
+  fetchReportData()
+})
+
+// Watch for report type changes
+watch(selectedReportType, () => {
+  fetchReportData()
+})
+
+// Watch for date range changes
+watch([startDate, endDate], () => {
+  if (startDate.value && endDate.value) {
+    fetchReportData()
+  }
+})
+console.log(recentRequests)
+
+// Add this helper function before the template
+const getStatusVariant = (status) => {
+  switch (status?.toLowerCase()) {
+    case 'accepted':
+      return 'success'
+    case 'pending':
+      return 'warning'
+    case 'completed':
+      return 'primary'
+    case 'rejected':
+      return 'danger'
+    default:
+      return 'secondary'
+  }
+}
+
+// Helper function to get profile image URL
+const getProfileImageUrl = (filename) => {
+  return filename ? professionalAPI.getProfilePictureUrl(filename) : 'https://avatar.iran.liara.run/public/11'
+}
 </script>
 
 <template>
@@ -209,11 +262,8 @@ setDefaultDateRange()
       <template #title>Report Configuration</template>
       <div class="row g-3">
         <div class="col-md-4">
-          <NeoSelect
-            v-model="selectedReportType"
-            :options="reportTypes.map((type) => ({ value: type.id, label: type.name }))"
-            label="Report Type"
-          />
+          <NeoSelect v-model="selectedReportType"
+            :options="reportTypes.map((type) => ({ value: type.id, label: type.name }))" label="Report Type" />
         </div>
         <div class="col-md-4">
           <NeoInput type="date" v-model="startDate" label="Start Date" />
@@ -270,7 +320,6 @@ setDefaultDateRange()
             <table class="table table-hover mb-0">
               <thead>
                 <tr>
-                  <th>ID</th>
                   <th>Service</th>
                   <th>Customer</th>
                   <th>Professional</th>
@@ -280,50 +329,23 @@ setDefaultDateRange()
                 </tr>
               </thead>
               <tbody>
-                <tr>
-                  <td>#1001</td>
-                  <td>Plumbing</td>
-                  <td>John Doe</td>
-                  <td>Mike Smith</td>
-                  <td>2023-05-25</td>
-                  <td><NeoBadge variant="success">Completed</NeoBadge></td>
-                  <td>₹550</td>
-                </tr>
-                <tr>
-                  <td>#1002</td>
-                  <td>Electrical</td>
-                  <td>Jane Brown</td>
-                  <td>Sarah Wilson</td>
-                  <td>2023-05-24</td>
-                  <td><NeoBadge variant="success">Completed</NeoBadge></td>
-                  <td>₹650</td>
-                </tr>
-                <tr>
-                  <td>#1003</td>
-                  <td>Cleaning</td>
-                  <td>Robert Johnson</td>
-                  <td>Emily Davis</td>
-                  <td>2023-05-24</td>
-                  <td><NeoBadge variant="warning">Pending</NeoBadge></td>
-                  <td>₹450</td>
-                </tr>
-                <tr>
-                  <td>#1004</td>
-                  <td>Gardening</td>
-                  <td>Maria Garcia</td>
-                  <td>--</td>
-                  <td>2023-05-23</td>
-                  <td><NeoBadge variant="primary">Assigned</NeoBadge></td>
-                  <td>₹350</td>
-                </tr>
-                <tr>
-                  <td>#1005</td>
-                  <td>Carpentry</td>
-                  <td>David Kim</td>
-                  <td>Alex Thompson</td>
-                  <td>2023-05-22</td>
-                  <td><NeoBadge variant="danger">Cancelled</NeoBadge></td>
-                  <td>₹700</td>
+                <tr v-for="request in recentRequests" :key="request.id">
+                  <td>{{ request.service?.name || 'N/A' }}</td>
+                  <td>
+                    <div class="d-flex align-items-center">
+                      <img :src="getProfileImageUrl(request.customer?.profile_image)" alt="Customer"
+                        class="rounded-circle me-2" style="width: 32px; height: 32px; object-fit: cover;" />
+                      <span>{{ request.customer?.name || 'N/A' }}</span>
+                    </div>
+                  </td>
+                  <td>{{ request.professional?.name || '--' }}</td>
+                  <td>{{ new Date(request.date_of_request).toLocaleDateString() }}</td>
+                  <td>
+                    <NeoBadge :variant="getStatusVariant(request.service_status)">
+                      {{ request.service_status }}
+                    </NeoBadge>
+                  </td>
+                  <td>₹{{ request.service?.price || 0 }}</td>
                 </tr>
               </tbody>
             </table>
@@ -336,15 +358,6 @@ setDefaultDateRange()
     <div v-if="selectedReportType === 'professional'" class="row g-4">
       <div class="col-lg-8">
         <NeoCard class="h-100">
-          <template #title>Professional Ratings Distribution</template>
-          <div class="chart-container" style="height: 350px; position: relative">
-            <Bar :data="professionalRatingChartData" :options="chartOptions" />
-          </div>
-        </NeoCard>
-      </div>
-
-      <div class="col-lg-4">
-        <NeoCard>
           <template #title>Professional Statistics</template>
           <div class="d-flex flex-column">
             <div class="d-flex justify-content-between border-bottom border-dark py-2">
@@ -359,13 +372,29 @@ setDefaultDateRange()
               <span>Active Professionals</span>
               <span class="fw-bold">42</span>
             </div>
-            <div class="d-flex justify-content-between border-bottom border-dark py-2">
+            <div class="d-flex justify-content-between py-2">
               <span>Blocked Professionals</span>
               <span class="fw-bold">2</span>
             </div>
+          </div>
+        </NeoCard>
+      </div>
+
+      <div class="col-lg-4">
+        <NeoCard>
+          <template #title>Professional Activity</template>
+          <div class="d-flex flex-column">
+            <div class="d-flex justify-content-between border-bottom border-dark py-2">
+              <span>Total Services</span>
+              <span class="fw-bold">156</span>
+            </div>
+            <div class="d-flex justify-content-between border-bottom border-dark py-2">
+              <span>Completed Services</span>
+              <span class="fw-bold">142</span>
+            </div>
             <div class="d-flex justify-content-between py-2">
-              <span>Average Rating</span>
-              <span class="fw-bold">4.3</span>
+              <span>Active Services</span>
+              <span class="fw-bold">14</span>
             </div>
           </div>
         </NeoCard>
@@ -390,45 +419,19 @@ setDefaultDateRange()
                 </tr>
               </thead>
               <tbody>
-                <tr>
-                  <td>John Doe</td>
-                  <td>12</td>
-                  <td>10</td>
-                  <td>2</td>
-                  <td>₹7,500</td>
-                  <td>2023-05-25</td>
-                </tr>
-                <tr>
-                  <td>Jane Brown</td>
-                  <td>9</td>
-                  <td>9</td>
-                  <td>0</td>
-                  <td>₹6,200</td>
-                  <td>2023-05-24</td>
-                </tr>
-                <tr>
-                  <td>Robert Johnson</td>
-                  <td>7</td>
-                  <td>5</td>
-                  <td>2</td>
-                  <td>₹4,500</td>
-                  <td>2023-05-24</td>
-                </tr>
-                <tr>
-                  <td>Maria Garcia</td>
-                  <td>6</td>
-                  <td>4</td>
-                  <td>2</td>
-                  <td>₹3,200</td>
-                  <td>2023-05-23</td>
-                </tr>
-                <tr>
-                  <td>David Kim</td>
-                  <td>5</td>
-                  <td>4</td>
-                  <td>1</td>
-                  <td>₹2,800</td>
-                  <td>2023-05-22</td>
+                <tr v-for="customer in customerActivity" :key="customer.customer">
+                  <td>
+                    <div class="d-flex align-items-center">
+                      <img :src="getProfileImageUrl(customer.profile_image)" alt="Profile" class="rounded-circle me-2"
+                        style="width: 40px; height: 40px; object-fit: cover;" />
+                      <span>{{ customer.customer }}</span>
+                    </div>
+                  </td>
+                  <td>{{ customer.total_requests }}</td>
+                  <td>{{ customer.completed }}</td>
+                  <td>{{ customer.cancelled }}</td>
+                  <td>₹{{ customer.total_spent }}</td>
+                  <td>{{ customer.last_request }}</td>
                 </tr>
               </tbody>
             </table>

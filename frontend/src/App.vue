@@ -1,50 +1,47 @@
 <script setup>
 import { RouterView } from 'vue-router'
-import { computed } from 'vue'
+import { computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import NeoButton from '@/components/ui/NeoButton.vue'
+import NeoIcon from '@/components/ui/NeoIcon.vue'
+import { useAuthStore } from '@/stores/auth'
+
 const router = useRouter()
+const authStore = useAuthStore()
 
-// In a real application, these would come from an auth store
-const isAuthenticated = computed(() => localStorage.getItem('token') !== null)
-const userRole = computed(() => localStorage.getItem('role'))
+const isAuthenticated = computed(() => authStore.isAuthenticated)
 
-const logout = () => {
-  localStorage.removeItem('token')
-  localStorage.removeItem('role')
+
+const logout = async () => {
+  await authStore.logout()
   router.push('/login')
 }
+
+onMounted(async () => {
+  console.log('App mounted, initializing auth...')
+  await authStore.initialize()
+})
 </script>
 
 <template>
   <div class="neo-brutalist">
     <!-- Navbar -->
-    <nav class="navbar navbar-expand-lg bg-black text-white py-2">
+    <nav class="navbar navbar-expand-lg bg-black text-white py-2 sticky-top">
       <div class="d-flex justify-content-between w-100 px-4">
-        <router-link
-          to="/"
-          class="navbar-brand fw-semibold bg-white px-2 text-decoration-none"
-          style="letter-spacing: -1px; font-size: 1.5rem; border: 4px solid #ff7f50"
-        >
+        <router-link to="/" class="navbar-brand fw-semibold bg-white px-2 text-decoration-none"
+          style="letter-spacing: -1px; font-size: 1.5rem; border: 4px solid #ff7f50">
           🦆 Quack
         </router-link>
-        <button
-          class="navbar-toggler border-0"
-          type="button"
-          data-bs-toggle="collapse"
-          data-bs-target="#navbarNav"
-          aria-controls="navbarNav"
-          aria-expanded="false"
-          aria-label="Toggle navigation"
-        >
-          <i class="bi bi-list text-white" style="font-size: 2rem"></i>
+        <button class="navbar-toggler border-0" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav"
+          aria-controls="navbarNav" aria-expanded="false" aria-label="Toggle navigation">
+          <NeoIcon name="menu" size="32" color="white" />
         </button>
         <div class="collapse navbar-collapse justify-content-end" id="navbarNav">
           <ul class="navbar-nav gap-2">
             <template v-if="!isAuthenticated">
               <li class="nav-item">
                 <router-link to="/login" class="nav-link p-0">
-                  <NeoButton variant="primary" size="sm" outline>Login</NeoButton>
+                  <NeoButton variant="primary" size="sm">Login</NeoButton>
                 </router-link>
               </li>
               <li class="nav-item">
@@ -66,7 +63,7 @@ const logout = () => {
     </nav>
 
     <!-- Main Content -->
-    <main class="neo-brutalist">
+    <main class="content-container">
       <RouterView />
     </main>
 
@@ -83,6 +80,13 @@ const logout = () => {
 .neo-brutalist {
   font-family: 'Inter', sans-serif;
   min-height: calc(100vh - 72px - 74px);
+}
+
+.content-container {
+  height: calc(100vh - 74px);
+  overflow-y: hidden;
+  overflow-x: hidden;
+
 }
 
 .navbar {

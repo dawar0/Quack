@@ -2,13 +2,15 @@
 import { ref } from 'vue'
 import NeoButton from '@/components/ui/NeoButton.vue'
 import NeoCard from '@/components/ui/NeoCard.vue'
+import NeoIcon from '@/components/ui/NeoIcon.vue'
+
 // Sample featured services
 const featuredServices = ref([
   {
     id: 1,
     name: 'Plumbing',
     description: 'Professional plumbing services for your home',
-    icon: 'bi-droplet',
+    icon: 'droplet',
     color: 'primary',
     rotation: '-3deg',
   },
@@ -16,7 +18,7 @@ const featuredServices = ref([
     id: 2,
     name: 'Electrical',
     description: 'Reliable electrical repair and installation services',
-    icon: 'bi-lightning',
+    icon: 'lightbulb',
     color: 'warning',
     rotation: '2deg',
   },
@@ -24,7 +26,7 @@ const featuredServices = ref([
     id: 3,
     name: 'Cleaning',
     description: 'Complete home cleaning and sanitization services',
-    icon: 'bi-brush',
+    icon: 'brush',
     color: 'info',
     rotation: '-2deg',
   },
@@ -32,7 +34,7 @@ const featuredServices = ref([
     id: 4,
     name: 'Gardening',
     description: 'Professional garden maintenance and landscaping',
-    icon: 'bi-flower1',
+    icon: 'flower',
     color: 'success',
     rotation: '3deg',
   },
@@ -100,7 +102,7 @@ const testimonials = ref([
           <div class="col-md-5 d-none d-md-block">
             <div class="hero-card-container">
               <NeoCard variant="primary" class="text-center hero-card">
-                <i class="bi bi-tools" style="font-size: 10rem"></i>
+                <NeoIcon name="wrench" size="160" />
               </NeoCard>
               <div class="hero-pattern-1"></div>
               <div class="hero-pattern-2"></div>
@@ -118,15 +120,12 @@ const testimonials = ref([
         </div>
         <div class="row g-4 justify-content-center">
           <div v-for="service in featuredServices" :key="service.id" class="col-md-6 col-lg-3">
-            <NeoCard
-              :variant="service.color"
-              class="service-card h-100"
-              :style="{ transform: `rotate(${service.rotation})` }"
-            >
+            <NeoCard :variant="service.color" class="service-card h-100"
+              :style="{ transform: `rotate(${service.rotation})` }">
               <template #title>
                 <div class="text-center">
                   <div class="icon-wrapper mb-3">
-                    <i :class="service.icon" class="bi" style="font-size: 3rem"></i>
+                    <NeoIcon :name="service.icon" size="48" />
                   </div>
                   <h5 class="fw-bold text-uppercase service-name">{{ service.name }}</h5>
                 </div>
@@ -155,7 +154,7 @@ const testimonials = ref([
           <div class="col-md-4">
             <div class="process-step" style="transform: rotate(-2deg)">
               <NeoCard variant="success" class="mb-3 process-card">
-                <i class="bi bi-search" style="font-size: 3.5rem"></i>
+                <NeoIcon name="search" size="56" />
               </NeoCard>
               <div class="step-number">1</div>
               <h4 class="fw-bold text-uppercase mt-4 process-title">Search</h4>
@@ -167,7 +166,7 @@ const testimonials = ref([
           <div class="col-md-4">
             <div class="process-step" style="transform: rotate(2deg)">
               <NeoCard variant="info" class="mb-3 process-card">
-                <i class="bi bi-calendar-check" style="font-size: 3.5rem"></i>
+                <NeoIcon name="calendar-check" size="56" />
               </NeoCard>
               <div class="step-number">2</div>
               <h4 class="fw-bold text-uppercase mt-4 process-title">Book</h4>
@@ -177,7 +176,7 @@ const testimonials = ref([
           <div class="col-md-4">
             <div class="process-step" style="transform: rotate(-1deg)">
               <NeoCard variant="warning" class="mb-3 process-card">
-                <i class="bi bi-star" style="font-size: 3.5rem"></i>
+                <NeoIcon name="star" size="56" />
               </NeoCard>
               <div class="step-number">3</div>
               <h4 class="fw-bold text-uppercase mt-4 process-title">Enjoy</h4>
@@ -196,13 +195,10 @@ const testimonials = ref([
         </div>
         <div class="row g-4 justify-content-center">
           <div v-for="testimonial in testimonials" :key="testimonial.id" class="col-md-4">
-            <NeoCard
-              :variant="testimonial.color"
-              class="testimonial-card h-100"
-              :style="{ transform: `rotate(${testimonial.rotation})` }"
-            >
+            <NeoCard :variant="testimonial.color" class="testimonial-card h-100"
+              :style="{ transform: `rotate(${testimonial.rotation})` }">
               <div class="rating mb-3">
-                <i v-for="i in testimonial.rating" :key="i" class="bi bi-star-fill"></i>
+                <NeoIcon v-for="i in testimonial.rating" :key="i" name="star" size="20" color="#000" />
               </div>
               <p class="fw-bold testimonial-text">"{{ testimonial.text }}"</p>
               <p class="text-end fw-black text-uppercase testimonial-name">
