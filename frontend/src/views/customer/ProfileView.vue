@@ -347,16 +347,7 @@ const deleteAccount = async () => {
               </div>
             </div>
 
-            <div class="mb-4 p-3 bg-light border border-dark border-3">
-              <div class="row mb-3">
-                <div class="col-sm-3">
-                  <p class="mb-0 fw-bold text-uppercase">Member Since</p>
-                </div>
-                <div class="col-sm-9">
-                  <p class="mb-0">{{ profile.joinDate }}</p>
-                </div>
-              </div>
-            </div>
+
           </div>
 
           <!-- Profile information in edit mode -->

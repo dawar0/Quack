@@ -130,6 +130,7 @@ export const serviceRequestAPI = {
   createRequest: (requestData) => api.post('/customer/requests', requestData),
   cancelRequest: (actionData) => api.post('/customer/requests/take_action', actionData),
   getCustomerActivityFeed: () => api.get('/customer/dashboard/activity'),
+  getCustomerStats: () => api.get('/customer/dashboard/stats'),
 
   // Professional endpoints
   getProfessionalRequests: () => api.get('/professional/requests'),

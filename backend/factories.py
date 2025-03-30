@@ -11,14 +11,16 @@ fake = Faker(["en_IN"])  # Using Indian locale for more realistic data
 class UserFactory:
     @staticmethod
     def create_admin(session: Session):
-        return User(
-            username="admin",
-            password=generate_password_hash("admin"),
-            name="Admin User",
-            email="admin@example.com",
-            phone_number=fake.phone_number(),
-            roles=[session.query(Role).filter_by(name="admin").first()],
-        )
+        with session.no_autoflush:
+            admin_role = session.query(Role).filter_by(name="admin").first()
+            return User(
+                username="admin",
+                password=generate_password_hash("admin"),
+                name="Admin User",
+                email="admin@example.com",
+                phone_number=fake.phone_number(),
+                roles=[admin_role],
+            )
 
     @staticmethod
     def create_professional(session: Session, service_type):
@@ -27,25 +29,26 @@ class UserFactory:
         username = fake.user_name()
 
         # Ensure username is unique
-        original_autoflush = session.autoflush
-        session.autoflush = False
-        while session.query(User).filter_by(username=username).first():
-            username = fake.user_name()
-        session.autoflush = original_autoflush
+        with session.no_autoflush:
+            while session.query(User).filter_by(username=username).first():
+                username = fake.user_name()
 
-        return User(
-            username=username,
-            password=generate_password_hash("password123"),
-            name=f"{first_name} {last_name}",
-            email=fake.email(),
-            phone_number=fake.phone_number(),
-            roles=[session.query(Role).filter_by(name="professional").first()],
-            service_type=service_type,
-            experience=f"{random.randint(1, 10)} years",
-            profile_docs_verified=random.choice([True, False]),
-            blocked=False,
-            description=fake.text(max_nb_chars=200),
-        )
+            professional_role = (
+                session.query(Role).filter_by(name="professional").first()
+            )
+            return User(
+                username=username,
+                password=generate_password_hash("password123"),
+                name=f"{first_name} {last_name}",
+                email=fake.email(),
+                phone_number=fake.phone_number(),
+                roles=[professional_role],
+                service_type=service_type,
+                experience=f"{random.randint(1, 10)} years",
+                profile_docs_verified=random.choice([True, False]),
+                blocked=False,
+                description=fake.text(max_nb_chars=200),
+            )
 
     @staticmethod
     def create_customer(session: Session):
@@ -54,22 +57,21 @@ class UserFactory:
         username = fake.user_name()
 
         # Ensure username is unique
-        original_autoflush = session.autoflush
-        session.autoflush = False
-        while session.query(User).filter_by(username=username).first():
-            username = fake.user_name()
-        session.autoflush = original_autoflush
+        with session.no_autoflush:
+            while session.query(User).filter_by(username=username).first():
+                username = fake.user_name()
 
-        return User(
-            username=username,
-            password=generate_password_hash("password123"),
-            name=f"{first_name} {last_name}",
-            email=fake.email(),
-            phone_number=fake.phone_number(),
-            roles=[session.query(Role).filter_by(name="customer").first()],
-            profile_docs_verified=True,
-            blocked=False,
-        )
+            customer_role = session.query(Role).filter_by(name="customer").first()
+            return User(
+                username=username,
+                password=generate_password_hash("password123"),
+                name=f"{first_name} {last_name}",
+                email=fake.email(),
+                phone_number=fake.phone_number(),
+                roles=[customer_role],
+                profile_docs_verified=True,
+                blocked=False,
+            )
 
 
 class ServiceFactory:

@@ -234,6 +234,8 @@ const testimonials = ref([
 .neo-brutalist-wrapper {
   font-family: 'Inter', sans-serif;
   overflow-x: hidden;
+  overflow-y: auto;
+  height: calc(100vh - 72px);
   position: relative;
 }
 
@@ -264,6 +266,8 @@ const testimonials = ref([
   overflow: hidden;
   border-bottom: 5px solid #000;
 }
+
+
 
 .hero-text-container {
   position: relative;

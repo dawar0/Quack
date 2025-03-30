@@ -1,5 +1,5 @@
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useRoute } from 'vue-router'
 import { useServiceRequestStore } from '@/stores/serviceRequest'
 import { useServiceStore } from '@/stores/service'
@@ -108,6 +108,8 @@ const formatServiceRequests = (requests) => {
 };
 
 // Fetch services and requests on component mount
+const pollingInterval = ref(null);
+
 onMounted(async () => {
   try {
     await Promise.all([
@@ -118,10 +120,23 @@ onMounted(async () => {
 
     // Process service requests data
     serviceRequests.value = formatServiceRequests(serviceRequestStore.customerRequests);
+
+    // Set up polling to refresh data every 60 seconds
+    pollingInterval.value = setInterval(async () => {
+      await serviceRequestStore.fetchCustomerRequests();
+      serviceRequests.value = formatServiceRequests(serviceRequestStore.customerRequests);
+    }, 60000); // 60 seconds
   } catch (error) {
     console.error('Error loading data:', error);
     showFeedback('Error', 'Failed to load services and requests.', 'danger')
     toastService.error('Failed to load services and requests.')
+  }
+})
+
+// Clean up interval when component is unmounted
+onUnmounted(() => {
+  if (pollingInterval.value) {
+    clearInterval(pollingInterval.value);
   }
 })
 

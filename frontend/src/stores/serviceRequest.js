@@ -16,14 +16,27 @@ export const useServiceRequestStore = defineStore('serviceRequest', {
       pendingJobs: 0,
       acceptedJobs: 0,
     },
+    customerStats: {
+      totalRequests: 0,
+      completedJobs: 0,
+      pendingJobs: 0,
+      activeJobs: 0,
+      cancelledJobs: 0,
+      totalSpent: 0,
+      servicesByCategory: [],
+    },
     activityFeed: [],
   }),
 
   getters: {
-    totalRequests: (state) => state.customerRequests.length,
-    completedJobs: (state) => state.dashboardStats.completedJobs,
-    pendingJobs: (state) => state.dashboardStats.pendingJobs,
-    activeJobs: (state) => state.dashboardStats.acceptedJobs,
+    totalRequests: (state) => state.customerStats.totalRequests || state.customerRequests.length,
+    completedJobs: (state) =>
+      state.customerStats.completedJobs || state.dashboardStats.completedJobs,
+    pendingJobs: (state) => state.customerStats.pendingJobs || state.dashboardStats.pendingJobs,
+    activeJobs: (state) => state.customerStats.activeJobs || state.dashboardStats.acceptedJobs,
+    cancelledJobs: (state) => state.customerStats.cancelledJobs || 0,
+    totalSpent: (state) => state.customerStats.totalSpent || 0,
+    servicesByCategory: (state) => state.customerStats.servicesByCategory || [],
     totalEarnings: (state) => state.dashboardStats.totalEarnings,
     recentActivity: (state) => state.activityFeed,
   },
@@ -161,17 +174,19 @@ export const useServiceRequestStore = defineStore('serviceRequest', {
       } catch (err) {
         console.error('Failed to fetch dashboard stats:', err)
         this.error = err.response?.data?.message || 'Failed to fetch dashboard stats'
-        // Default values if API fails
         this.dashboardStats = {
           totalEarnings: this.assignedRequests
-            .filter((req) => req.service_status === 'Completed')
+            .filter((req) => req.service_status?.toLowerCase() === 'completed')
             .reduce((sum, req) => sum + (req.service?.price || 0), 0),
-          completedJobs: this.assignedRequests.filter((req) => req.service_status === 'Completed')
-            .length,
-          pendingJobs: this.professionalRequests.filter((req) => req.service_status === 'Pending')
-            .length,
-          acceptedJobs: this.assignedRequests.filter((req) => req.service_status === 'Accepted')
-            .length,
+          completedJobs: this.assignedRequests.filter(
+            (req) => req.service_status?.toLowerCase() === 'completed',
+          ).length,
+          pendingJobs: this.professionalRequests.filter(
+            (req) => req.service_status?.toLowerCase() === 'pending',
+          ).length,
+          acceptedJobs: this.assignedRequests.filter(
+            (req) => req.service_status?.toLowerCase() === 'accepted',
+          ).length,
         }
         return false
       } finally {
@@ -208,6 +223,42 @@ export const useServiceRequestStore = defineStore('serviceRequest', {
         this.error = err.response?.data?.message || 'Failed to fetch activity feed'
         // Generate default activity feed from customer requests if API fails
 
+        return false
+      } finally {
+        this.loading = false
+      }
+    },
+
+    async fetchCustomerStats() {
+      try {
+        this.loading = true
+        this.error = null
+        const response = await serviceRequestAPI.getCustomerStats()
+        this.customerStats = response.data
+        return true
+      } catch (err) {
+        console.error('Failed to fetch customer stats:', err)
+        this.error = err.response?.data?.message || 'Failed to fetch customer stats'
+        // Calculate basic stats from requests if API fails
+        this.customerStats = {
+          totalRequests: this.customerRequests.length,
+          completedJobs: this.customerRequests.filter(
+            (req) => req.service_status?.toLowerCase() === 'completed',
+          ).length,
+          pendingJobs: this.customerRequests.filter(
+            (req) => req.service_status?.toLowerCase() === 'pending',
+          ).length,
+          activeJobs: this.customerRequests.filter(
+            (req) => req.service_status?.toLowerCase() === 'accepted',
+          ).length,
+          cancelledJobs: this.customerRequests.filter(
+            (req) => req.service_status?.toLowerCase() === 'cancelled',
+          ).length,
+          totalSpent: this.customerRequests
+            .filter((req) => req.service_status?.toLowerCase() === 'completed')
+            .reduce((sum, req) => sum + (req.service?.price || 0), 0),
+          servicesByCategory: [],
+        }
         return false
       } finally {
         this.loading = false

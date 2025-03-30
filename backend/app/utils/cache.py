@@ -4,6 +4,58 @@ from functools import wraps
 from typing import Any, Callable, Dict, List, Optional, Tuple, Union
 import redis
 from flask import current_app, request
+from sqlalchemy.ext.declarative import DeclarativeMeta
+from datetime import datetime, date
+
+
+class SQLAlchemyEncoder(json.JSONEncoder):
+    """Custom JSON encoder for SQLAlchemy models"""
+
+    def default(self, obj):
+        # Handle datetime objects
+        if isinstance(obj, (datetime, date)):
+            return obj.isoformat()
+
+        # Check if object is a SQLAlchemy model by checking for __table__ attribute
+        if hasattr(obj, "__table__"):
+            # Convert SQLAlchemy model to dict
+            data = {}
+            # Add all column attributes
+            for c in obj.__table__.columns:
+                data[c.name] = getattr(obj, c.name)
+
+            # Add relationship attributes that were loaded
+            for key, value in obj.__dict__.items():
+                # Skip private attributes and SQLAlchemy internal attributes
+                if key.startswith("_"):
+                    continue
+                # Skip columns that were already added above
+                if key in data:
+                    continue
+                # Handle loaded relationships
+                if value is not None:
+                    try:
+                        # Check if it's a loaded relationship
+                        if hasattr(value, "__table__"):
+                            # It's a single object relationship
+                            data[key] = self.default(value)
+                        elif (
+                            isinstance(value, list)
+                            and len(value) > 0
+                            and hasattr(value[0], "__table__")
+                        ):
+                            # It's a list relationship
+                            data[key] = [self.default(item) for item in value]
+                    except (AttributeError, IndexError, TypeError):
+                        # Skip if we encounter any error
+                        pass
+            return data
+
+        # For lists of SQLAlchemy models
+        if isinstance(obj, list) and len(obj) > 0 and hasattr(obj[0], "__table__"):
+            return [self.default(item) for item in obj]
+        # Let the base class handle raising TypeError
+        return json.JSONEncoder.default(self, obj)
 
 
 # Initialize Redis client
@@ -116,12 +168,22 @@ def cache_result(prefix: str, expiration: int = None, args_as_key: bool = False)
             # Call the function
             result = func(*args, **kwargs)
 
-            # Cache the result
+            # Cache the result using SQLAlchemyEncoder for SQLAlchemy models
             if expiration is None:
                 exp = get_default_expiration()
             else:
                 exp = expiration
-            set_cache(key, json.dumps(result), exp)
+
+            try:
+                # Try to serialize with the custom encoder
+                serialized = json.dumps(result, cls=SQLAlchemyEncoder)
+                set_cache(key, serialized, exp)
+            except (TypeError, Exception) as e:
+                # If serialization fails, log it but continue without caching
+                current_app.logger.warning(
+                    f"Failed to cache result for {key}: {str(e)}"
+                )
+                # Return the result without caching
 
             return result
 

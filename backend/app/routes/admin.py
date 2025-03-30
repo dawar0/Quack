@@ -1,5 +1,5 @@
 from flask import Blueprint, request, Response, send_file
-from flask_restx import Namespace, Resource, fields
+from flask_restx import Namespace, Resource, fields, marshal
 from flask_jwt_extended import jwt_required, get_jwt
 from ..models import (
     User,
@@ -27,6 +27,43 @@ admin_bp = Namespace("admin", description="Admin operations")
 # Instead of creating a child namespace, just create a new namespace with the same path prefix
 cache_ns = Namespace("admin/cache", description="Cache management operations")
 
+
+class RoleIdsField(fields.Raw):
+    def format(self, value):
+        # Log the type of value to help debugging
+        print(f"RoleIdsField value type: {type(value)}")
+
+        # Handle User object
+        if hasattr(value, "roles"):
+            try:
+                # Force loading of the relationship
+                roles = list(value.roles)
+                role_ids = [role.id for role in roles if hasattr(role, "id")]
+                print(f"Extracted role_ids: {role_ids}")
+                return role_ids
+            except Exception as e:
+                print(f"Error extracting role_ids: {str(e)}")
+                return []
+        # Handle list of Role objects
+        elif isinstance(value, list):
+            try:
+                role_ids = [role.id for role in value if hasattr(role, "id")]
+                print(f"List - Extracted role_ids: {role_ids}")
+                return role_ids
+            except Exception as e:
+                print(f"Error with list of roles: {str(e)}")
+                return []
+        # Fallback - return empty list
+        return []
+
+
+# Define role_model before user_model to avoid circular dependency
+role_model = admin_bp.model(
+    "Role",
+    {"id": fields.Integer(readonly=True), "name": fields.String(required=True)},
+    model_id="admin_role_model",
+)
+
 user_model = admin_bp.model(
     "User",
     {
@@ -35,7 +72,8 @@ user_model = admin_bp.model(
         "name": fields.String(),
         "email": fields.String(),
         "phone_number": fields.String(),
-        "role_ids": fields.List(fields.Integer),
+        "role_ids": RoleIdsField(attribute="roles"),
+        "roles": fields.List(fields.Nested(role_model)),
         "date_created": fields.DateTime(),
         "description": fields.String(),
         "experience": fields.String(),
@@ -47,12 +85,6 @@ user_model = admin_bp.model(
         "address": fields.String(),
     },
     model_id="admin_user_model",
-)
-
-role_model = admin_bp.model(
-    "Role",
-    {"id": fields.Integer(readonly=True), "name": fields.String(required=True)},
-    model_id="admin_role_model",
 )
 
 service_model = admin_bp.model(
@@ -75,7 +107,8 @@ user_details_model = admin_bp.model(
         "name": fields.String(),
         "email": fields.String(),
         "phone_number": fields.String(),
-        "role_ids": fields.List(fields.Integer),
+        "roles": fields.List(fields.Nested(role_model)),
+        "role_ids": RoleIdsField(attribute="roles"),
         "date_created": fields.DateTime(),
         "description": fields.String(),
         "experience": fields.String(),
@@ -179,10 +212,14 @@ class CacheUsage(Resource):
 class UserList(Resource):
     @admin_bp.marshal_list_with(user_model)
     @admin_required()
-    @cache_result("admin:users", expiration=300)
     def get(self):
         """List all users."""
-        return User.query.all()
+        # Clear cache for this endpoint to ensure fresh data
+        delete_pattern("admin:users")
+
+        # Use joinedload to eagerly load the roles relationship
+        users = User.query.options(joinedload(User.roles)).all()
+        return users
 
 
 @admin_bp.route("/users/<int:user_id>")
@@ -190,10 +227,15 @@ class UserDetail(Resource):
     @admin_bp.marshal_with(user_model)
     @admin_bp.response(404, "User not found")
     @admin_required()
-    @cache_result("admin:user", expiration=300, args_as_key=True)
     def get(self, user_id):
         """Get details of a specific user."""
-        user = User.query.get_or_404(user_id)
+        # Clear cache for this specific user
+        from ..utils.cache import delete_cache, delete_pattern
+
+        delete_pattern(f"admin:user:{user_id}")
+
+        # Use joinedload to eagerly load the roles relationship
+        user = User.query.options(joinedload(User.roles)).get_or_404(user_id)
         return user
 
 
@@ -428,13 +470,13 @@ class UserStatusUpdate(Resource):
             delete_pattern("admin:users")
 
             # Invalidate user-specific caches based on role
-            professional = Professional.query.filter_by(user_id=user_id).first()
-            customer = Customer.query.filter_by(user_id=user_id).first()
-
-            if professional:
-                delete_pattern(f"professional:profile:{user_id}")
-            if customer:
-                delete_pattern(f"customer:profile:{user_id}")
+            for role in user.roles:
+                if role.name == "professional":
+                    delete_pattern(f"professional:profile:{user_id}")
+                    delete_pattern(f"professional:requests")
+                elif role.name == "customer":
+                    delete_pattern(f"customer:profile:{user_id}")
+                    delete_pattern(f"customer:requests")
 
             return user
         except Exception as e:

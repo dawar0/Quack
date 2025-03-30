@@ -117,6 +117,8 @@ class CustomerRequests(Resource):
         db.session.commit()
 
         delete_pattern(f"customer:requests:{customer_id}")
+        delete_pattern(f"customer:stats:{customer_id}")
+        delete_pattern(f"customer:activity:{customer_id}")
 
         # Send confirmation email to the customer
         customer = User.query.get(customer_id)
@@ -134,7 +136,7 @@ class CustomerRequests(Resource):
 
     @jwt_required()
     @customer_bp.marshal_list_with(service_request_model)
-    @cache_result("customer:requests", expiration=300, args_as_key=True)
+    @cache_result("customer:requests:{identity}", expiration=300)
     def get(self):
         """List all service requests for the logged-in customer."""
         customer_id = get_jwt_identity()
@@ -154,7 +156,7 @@ class CustomerRequestDetail(Resource):
     @jwt_required()
     @customer_bp.marshal_with(service_request_model)
     @customer_bp.response(404, "Request not found")
-    @cache_result("customer:request", expiration=300, args_as_key=True)
+    @cache_result("customer:request:{request_id}:{identity}", expiration=300)
     def get(self, request_id):
         """Get details of a specific service request for the logged-in customer."""
         customer_id = get_jwt_identity()
@@ -198,13 +200,27 @@ class TakeActionOnRequest(Resource):
             db.session.commit()
 
             delete_pattern(f"customer:requests:{customer_id}")
-            delete_pattern(f"customer:request:{request_id}")
+            delete_pattern(f"customer:request:{request_id}:{customer_id}")
+            delete_pattern(f"customer:stats:{customer_id}")
+            delete_pattern(f"customer:activity:{customer_id}")
+            delete_pattern(
+                "professional:requests"
+            )  # Invalidate main professional requests cache
+            delete_pattern(
+                "professional:requests:available"
+            )  # Invalidate available requests cache
 
             if service_request.professional_id:
                 delete_pattern(
                     f"professional:requests:assigned:{service_request.professional_id}"
                 )
                 delete_pattern(f"professional:request:{request_id}")
+                delete_pattern(
+                    f"professional:dashboard:stats:{service_request.professional_id}"
+                )
+                delete_pattern(
+                    f"professional:dashboard:activity:{service_request.professional_id}"
+                )
 
                 # Notify the professional if one was assigned
                 professional = User.query.get(service_request.professional_id)
@@ -282,7 +298,7 @@ class CustomerActivityFeed(Resource):
     @jwt_required()
     @customer_bp.marshal_list_with(activity_item_model)
     @customer_bp.doc(description="Get activity feed for the logged-in customer.")
-    @cache_result("customer:activity", expiration=300, args_as_key=True)
+    @cache_result("customer:activity:{identity}", expiration=300)
     def get(self):
         """Get activity feed for the logged-in customer."""
         from sqlalchemy import desc
@@ -349,7 +365,7 @@ class CustomerProfile(Resource):
     @customer_bp.marshal_with(user_details_model)
     @customer_bp.doc(description="Get customer profile")
     @customer_required()
-    @cache_result("customer:profile", expiration=600, args_as_key=True)
+    @cache_result("customer:profile:{identity}", expiration=600)
     def get(self):
         """Get customer profile."""
         customer_id = get_jwt_identity()
@@ -379,6 +395,8 @@ class CustomerProfile(Resource):
         db.session.commit()
 
         delete_pattern(f"customer:profile:{customer_id}")
+        delete_pattern(f"customer:stats:{customer_id}")
+        delete_pattern(f"customer:activity:{customer_id}")
 
         return customer
 
@@ -404,6 +422,9 @@ class CustomerPassword(Resource):
 
         user.password = generate_password_hash(new_password)
         db.session.commit()
+
+        # Invalidate relevant caches
+        delete_pattern(f"customer:profile:{customer_id}")
 
         return {"message": "Password updated successfully"}, 200
 
@@ -473,6 +494,9 @@ class CustomerProfilePicture(Resource):
             user.profile_image = filename
             db.session.commit()
 
+            # Invalidate profile cache
+            delete_pattern(f"customer:profile:{customer_id}")
+
             return {"message": "Profile picture updated successfully"}, 200
 
         return {"message": "Invalid file type"}, 400
@@ -502,7 +526,70 @@ class CustomerAccount(Resource):
         db.session.delete(user)
         db.session.commit()
 
+        # Invalidate all customer-related caches
+        delete_pattern(f"customer:*:{customer_id}")
+
         return {"message": "Account deleted successfully"}, 200
+
+
+@customer_bp.route("/dashboard/stats")
+class CustomerDashboardStats(Resource):
+    @jwt_required()
+    @customer_bp.doc(description="Get stats for customer dashboard")
+    @customer_required()
+    @cache_result("customer:stats:{identity}", expiration=300)
+    def get(self):
+        """Get statistics for the customer dashboard."""
+        customer_id = get_jwt_identity()
+
+        # Get all service requests for the customer
+        service_requests = ServiceRequest.query.filter_by(customer_id=customer_id).all()
+
+        total_requests = len(service_requests)
+        completed_requests = len(
+            [r for r in service_requests if r.service_status.lower() == "completed"]
+        )
+        pending_requests = len(
+            [r for r in service_requests if r.service_status.lower() == "pending"]
+        )
+        accepted_requests = len(
+            [r for r in service_requests if r.service_status.lower() == "accepted"]
+        )
+        cancelled_requests = len(
+            [r for r in service_requests if r.service_status.lower() == "cancelled"]
+        )
+
+        # Calculate money spent on completed services
+        total_spent = 0
+        for request in service_requests:
+            if request.service_status.lower() == "completed":
+                service = Service.query.get(request.service_id)
+                if service:
+                    total_spent += service.price
+
+        # Get services by category
+        services_data = (
+            db.session.query(Service.name, db.func.count(ServiceRequest.id))
+            .join(ServiceRequest, ServiceRequest.service_id == Service.id)
+            .filter(ServiceRequest.customer_id == customer_id)
+            .group_by(Service.name)
+            .all()
+        )
+
+        services_by_category = [
+            {"name": name, "count": count} for name, count in services_data
+        ]
+
+        # Return stats
+        return {
+            "totalRequests": total_requests,
+            "completedJobs": completed_requests,
+            "pendingJobs": pending_requests,
+            "activeJobs": accepted_requests,
+            "cancelledJobs": cancelled_requests,
+            "totalSpent": float(total_spent),
+            "servicesByCategory": services_by_category,
+        }
 
 
 # Helper function to check allowed file extensions

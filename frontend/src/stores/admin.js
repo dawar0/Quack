@@ -28,8 +28,27 @@ export const useAdminStore = defineStore('admin', {
   }),
 
   getters: {
-    customers: (state) => state.users.filter((user) => user.role_ids.includes(3)),
-    professionals: (state) => state.users.filter((user) => user.role_ids.includes(2)),
+    customers: (state) =>
+      state.users.filter((user) => {
+        // Handle both role_ids array and roles array of objects
+        if (user.role_ids && Array.isArray(user.role_ids)) {
+          return user.role_ids.includes(3)
+        } else if (user.roles && Array.isArray(user.roles)) {
+          return user.roles.some((role) => role.id === 3)
+        }
+        return false
+      }),
+
+    professionals: (state) =>
+      state.users.filter((user) => {
+        // Handle both role_ids array and roles array of objects
+        if (user.role_ids && Array.isArray(user.role_ids)) {
+          return user.role_ids.includes(2)
+        } else if (user.roles && Array.isArray(user.roles)) {
+          return user.roles.some((role) => role.id === 2)
+        }
+        return false
+      }),
   },
 
   actions: {

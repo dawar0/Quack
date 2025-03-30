@@ -189,9 +189,17 @@ class ProfessionalRequestDetail(Resource):
     def get(self, request_id):
         """Get details of a specific service request."""
         professional_id = get_jwt_identity()
-        request = ServiceRequest.query.filter_by(
-            id=request_id,
-        ).first_or_404()
+        request = (
+            ServiceRequest.query.filter_by(
+                id=request_id,
+            )
+            .options(
+                joinedload(ServiceRequest.customer),
+                joinedload(ServiceRequest.professional),
+                joinedload(ServiceRequest.service),
+            )
+            .first_or_404()
+        )
         return request
 
 
@@ -228,6 +236,9 @@ class TakeActionOnRequest(Resource):
             db.session.commit()
 
             delete_pattern("professional:requests:available")
+            delete_pattern(
+                "professional:requests"
+            )  # Invalidate main professional requests cache
             delete_pattern(f"professional:requests:assigned:{professional_id}")
             delete_pattern(f"professional:request:{request_id}")
             delete_pattern(f"professional:dashboard:stats:{professional_id}")
@@ -295,6 +306,9 @@ class TakeActionOnRequest(Resource):
             db.session.commit()
 
             delete_pattern(f"professional:requests:assigned:{professional_id}")
+            delete_pattern(
+                "professional:requests"
+            )  # Invalidate main professional requests cache
             delete_pattern(f"professional:request:{request_id}")
             delete_pattern(f"professional:dashboard:stats:{professional_id}")
             delete_pattern(f"professional:dashboard:activity:{professional_id}")

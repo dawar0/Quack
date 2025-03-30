@@ -167,7 +167,6 @@ const handleStatusChange = async (professional, newStatus) => {
         blocked: professional.blocked
       })
       professionals.value = adminStore.professionals
-      toastService.success(`Professional ${professional.name} has been ${newStatus}.`)
     } catch (error) {
       console.error('Error updating status:', error)
       toastService.error(error.response?.data?.message || `Failed to ${newStatus} professional.`)
@@ -189,7 +188,6 @@ const submitDisapproval = async () => {
 
     professionals.value = adminStore.professionals
     showRejectionModal.value = false
-    toastService.success(`Professional ${professionalToDisapprove.value.name} has been disapproved.`)
   } catch (error) {
     console.error('Error disapproving professional:', error)
     toastService.error(error.response?.data?.message || 'Failed to disapprove professional.')
@@ -207,7 +205,6 @@ const toggleBlockStatus = async (professional) => {
         status: professional.status
       })
       professionals.value = adminStore.professionals
-      toastService.success(`Professional ${professional.name} has been ${newStatus}ed.`)
     } catch (error) {
       console.error('Error updating block status:', error)
       toastService.error(error.response?.data?.message || `Failed to ${newStatus} professional.`)

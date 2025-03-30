@@ -98,10 +98,12 @@ const acceptRequest = (requestId) => {
         action: 'accept'
       })
 
-      // Refresh both lists
+      // Refresh all relevant data to ensure cache invalidation
       await Promise.all([
         serviceRequestStore.fetchProfessionalRequests(),
-        serviceRequestStore.fetchAssignedRequests()
+        serviceRequestStore.fetchAssignedRequests(),
+        serviceRequestStore.fetchDashboardStats(),
+        serviceRequestStore.fetchActivityFeed()
       ])
 
       serviceRequests.value = serviceRequestStore.professionalRequests
@@ -128,10 +130,12 @@ const completeRequest = (requestId) => {
         remarks: completionRemarks.value.trim()
       })
 
-      // Refresh both lists
+      // Refresh all relevant data to ensure cache invalidation
       await Promise.all([
         serviceRequestStore.fetchProfessionalRequests(),
-        serviceRequestStore.fetchAssignedRequests()
+        serviceRequestStore.fetchAssignedRequests(),
+        serviceRequestStore.fetchDashboardStats(),
+        serviceRequestStore.fetchActivityFeed()
       ])
 
       serviceRequests.value = serviceRequestStore.professionalRequests
@@ -154,14 +158,15 @@ const executeConfirmAction = () => {
 
 // Helper function to get status badge class
 const getStatusBadgeClass = (status) => {
-  switch (status) {
-    case 'Pending':
+  const lowerStatus = status.toLowerCase();
+  switch (lowerStatus) {
+    case 'pending':
       return 'info'
-    case 'Accepted':
+    case 'accepted':
       return 'primary'
-    case 'Completed':
+    case 'completed':
       return 'success'
-    case 'Cancelled':
+    case 'cancelled':
       return 'danger'
     default:
       return 'secondary'
@@ -215,7 +220,7 @@ const getProfileImageUrl = (filename) => {
                 <td>{{ new Date(request.date_of_request).toLocaleDateString() }}</td>
                 <td>
                   <NeoBadge :variant="getStatusBadgeClass(request.service_status)">
-                    {{ request.service_status }}
+                    {{ request.service_status.charAt(0).toUpperCase() + request.service_status.slice(1).toLowerCase() }}
                   </NeoBadge>
                 </td>
                 <td>${{ request.service.price }}</td>
@@ -224,7 +229,7 @@ const getProfileImageUrl = (filename) => {
                     <i class="bi bi-eye"></i>
                   </NeoButton>
 
-                  <NeoButton v-if="request.service_status === 'Pending'" variant="success" size="sm"
+                  <NeoButton v-if="request.service_status.toLowerCase() === 'pending'" variant="success" size="sm"
                     @click="acceptRequest(request.id)" class="me-1">
                     <i class="bi bi-check-lg"></i>
                   </NeoButton>
@@ -269,7 +274,7 @@ const getProfileImageUrl = (filename) => {
                 <td>{{ new Date(request.date_of_request).toLocaleDateString() }}</td>
                 <td>
                   <NeoBadge :variant="getStatusBadgeClass(request.service_status)">
-                    {{ request.service_status }}
+                    {{ request.service_status.charAt(0).toUpperCase() + request.service_status.slice(1).toLowerCase() }}
                   </NeoBadge>
                 </td>
                 <td>${{ request.service.price }}</td>
@@ -278,7 +283,7 @@ const getProfileImageUrl = (filename) => {
                     <i class="bi bi-eye"></i>
                   </NeoButton>
 
-                  <NeoButton v-if="request.service_status === 'Accepted'" variant="success" size="sm"
+                  <NeoButton v-if="request.service_status.toLowerCase() === 'accepted'" variant="success" size="sm"
                     @click="completeRequest(request.id)" class="me-1">
                     <i class="bi bi-check-circle"></i>
                   </NeoButton>
@@ -320,7 +325,8 @@ const getProfileImageUrl = (filename) => {
           <p>
             <strong>Status:</strong>
             <NeoBadge :variant="getStatusBadgeClass(selectedRequest.service_status)" class="ms-2">
-              {{ selectedRequest.service_status.charAt(0).toUpperCase() + selectedRequest.service_status.slice(1) }}
+              {{ selectedRequest.service_status.charAt(0).toUpperCase() +
+                selectedRequest.service_status.slice(1).toLowerCase() }}
             </NeoBadge>
           </p>
 
@@ -329,7 +335,7 @@ const getProfileImageUrl = (filename) => {
             <p>{{ selectedRequest.remarks }}</p>
           </div>
 
-          <div v-if="selectedRequest.service_status === 'Accepted'">
+          <div v-if="selectedRequest.service_status.toLowerCase() === 'accepted'">
             <h5 class="mt-4">Completion Form</h5>
             <div class="mb-3">
               <label for="completionRemarks" class="form-label">Completion Remarks</label>
@@ -342,14 +348,15 @@ const getProfileImageUrl = (filename) => {
       <template #footer>
         <NeoButton variant="secondary" @click="showRequestDetails = false">Close</NeoButton>
 
-        <template v-if="selectedRequest && activeTab === 'available' && selectedRequest.service_status === 'Pending'">
+        <template
+          v-if="selectedRequest && activeTab === 'available' && selectedRequest.service_status.toLowerCase() === 'pending'">
           <NeoButton variant="success" @click="acceptRequest(selectedRequest.id)" class="ms-2">
             Accept Request
           </NeoButton>
         </template>
 
-        <NeoButton v-if="selectedRequest && selectedRequest.service_status === 'Accepted'" variant="success"
-          @click="completeRequest(selectedRequest.id)" class="ms-2">
+        <NeoButton v-if="selectedRequest && selectedRequest.service_status.toLowerCase() === 'accepted'"
+          variant="success" @click="completeRequest(selectedRequest.id)" class="ms-2">
           Mark as Completed
         </NeoButton>
       </template>
