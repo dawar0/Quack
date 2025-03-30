@@ -74,7 +74,6 @@ const showFeedback = (title, message, variant = 'info') => {
 const fetchProfessionalData = async () => {
   try {
     const user = await authStore.user
-    console.log(user)
     professionalData.value = {
       name: user.name,
       serviceType: user.service_type,

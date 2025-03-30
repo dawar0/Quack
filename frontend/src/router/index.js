@@ -123,8 +123,6 @@ router.beforeEach((to, from, next) => {
     userRoles?.map((r) => r.name).includes('professional') &&
     authStore.user?.status === 'disapproved'
 
-  console.log(authStore.user)
-
   // If user is blocked and trying to access any protected route, redirect to blocked page
   if (isBlocked && requiresAuth) {
     next('/blocked')

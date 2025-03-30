@@ -4,7 +4,6 @@ import NeoButton from '@/components/ui/NeoButton.vue'
 import NeoCard from '@/components/ui/NeoCard.vue'
 import NeoIcon from '@/components/ui/NeoIcon.vue'
 
-// Sample featured services
 const featuredServices = ref([
   {
     id: 1,
@@ -40,7 +39,6 @@ const featuredServices = ref([
   },
 ])
 
-// Sample testimonials
 const testimonials = ref([
   {
     id: 1,

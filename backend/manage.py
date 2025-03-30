@@ -1,7 +1,6 @@
 import os
 from app import create_app
 from app.database import db
-from app import models
 from flask_migrate import Migrate, upgrade, migrate, init, downgrade
 import click
 from seed_data import seed_database

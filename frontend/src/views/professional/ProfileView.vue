@@ -61,19 +61,9 @@ const showFeedback = (title, message, variant = 'info') => {
 const initializeData = () => {
   const user = authStore.user
   if (user) {
-    // For debugging - log the profile image data
-    console.log('Profile image from server:', user.profile_image)
-
-    let profileImageUrl = 'https://avatar.iran.liara.run/public/11' // Default fallback
-
-    if (user.profile_image) {
-      try {
-        profileImageUrl = professionalAPI.getProfilePictureUrl(user.profile_image)
-        console.log('Constructed profile image URL:', profileImageUrl)
-      } catch (error) {
-        console.error('Error creating profile image URL:', error)
-      }
-    }
+    let profileImageUrl = user.profile_image
+      ? professionalAPI.getProfilePictureUrl(user.profile_image)
+      : 'https://avatar.iran.liara.run/public/11'
 
     professionalData.value = {
       id: user.id,

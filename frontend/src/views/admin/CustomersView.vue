@@ -29,7 +29,6 @@ onMounted(async () => {
     if (!success) {
       throw new Error(adminStore.error || 'Failed to fetch users')
     }
-    console.log(adminStore.users)
     customers.value = adminStore.users.filter(user => user.role_ids && user.role_ids.includes(3)) // Filter customers
   } catch (error) {
     console.error('Error fetching customers:', error)

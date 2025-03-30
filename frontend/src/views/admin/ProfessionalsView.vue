@@ -151,8 +151,6 @@ const viewDocument = async (document) => {
 
 // Handle professional status changes
 const handleStatusChange = async (professional, newStatus) => {
-  console.log('handleStatusChange called with:', { professional, newStatus })
-
   if (newStatus === 'disapproved') {
     // Show rejection reason modal
     professionalToDisapprove.value = professional
@@ -240,11 +238,12 @@ const getStatusBadgeClass = (status) => {
   }
 }
 
-// Get profile image URL helper function
+// Helper function to get profile image URL
 const getProfileImageUrl = (filename) => {
   return filename ? professionalAPI.getProfilePictureUrl(filename) : 'https://avatar.iran.liara.run/public/11'
 }
-console.log(professionals)
+
+professionals.value = adminStore.professionals || []
 </script>
 
 <template>

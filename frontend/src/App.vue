@@ -18,7 +18,6 @@ const logout = async () => {
 }
 
 onMounted(async () => {
-  console.log('App mounted, initializing auth...')
   await authStore.initialize()
 })
 </script>

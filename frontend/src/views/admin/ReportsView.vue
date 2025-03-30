@@ -229,7 +229,6 @@ watch([startDate, endDate], () => {
     fetchReportData()
   }
 })
-console.log(recentRequests)
 
 // Add this helper function before the template
 const getStatusVariant = (status) => {

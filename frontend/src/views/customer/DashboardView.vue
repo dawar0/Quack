@@ -68,9 +68,6 @@ const fetchCustomerData = async () => {
       ? professionalAPI.getProfilePictureUrl(user.profile_image)
       : 'https://avatar.iran.liara.run/public/11'
 
-    console.log('Profile image from server:', user.profile_image)
-    console.log('Constructed profile image URL:', profileImageUrl)
-
     customerData.value = {
       name: user.name,
       email: user.email,
@@ -154,7 +151,6 @@ const calculateDashboardStats = () => {
     timeAgo: formatTimeAgo(activity.timestamp)
   })) || []
 }
-console.log(recentActivity)
 
 // Fetch data on component mount
 onMounted(async () => {

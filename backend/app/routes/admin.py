@@ -7,12 +7,6 @@ from ..models import (
     Service,
     ServiceRequest,
     Document,
-    Admin,
-    Customer,
-    Professional,
-    Notification,
-    Review,
-    PaymentTransaction,
 )
 from sqlalchemy.orm import joinedload
 from ..database import db
@@ -29,6 +23,9 @@ from ..utils.cache_management import (
 from ..utils.cache import cache_result, delete_pattern
 
 admin_bp = Namespace("admin", description="Admin operations")
+
+# Instead of creating a child namespace, just create a new namespace with the same path prefix
+cache_ns = Namespace("admin/cache", description="Cache management operations")
 
 user_model = admin_bp.model(
     "User",
@@ -123,9 +120,6 @@ document_model = admin_bp.model(
     },
     model_id="admin_document_model",
 )
-
-# Add a cache management namespace within the admin namespace
-cache_ns = admin_bp.namespace("cache", description="Cache management operations")
 
 
 @cache_ns.route("/stats")
