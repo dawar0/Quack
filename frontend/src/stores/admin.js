@@ -304,8 +304,30 @@ export const useAdminStore = defineStore('admin', {
         this.error = null
         const response = await adminAPI.exportReport(params)
 
+        // Create a blob from the response data
+        const blob = new Blob([response.data], { type: response.headers['content-type'] })
+
+        // Create a download link and trigger it
+        const url = window.URL.createObjectURL(blob)
+        const link = document.createElement('a')
+        link.href = url
+
+        // Get filename from Content-Disposition or create a default one
+        const contentDisposition = response.headers['content-disposition']
+        const filename = contentDisposition
+          ? contentDisposition.split('filename=')[1].replace(/"/g, '')
+          : `report_${params.type}_${params.start_date}_${params.end_date}.csv`
+
+        link.setAttribute('download', filename)
+        document.body.appendChild(link)
+        link.click()
+
+        // Clean up
+        window.URL.revokeObjectURL(url)
+        link.remove()
+
         toastService.success('Report exported successfully')
-        return response
+        return true
       } catch (err) {
         console.error('Failed to export report:', err)
         this.error = err.response?.data?.message || 'Failed to export report'

@@ -192,7 +192,6 @@ const exportReport = async () => {
 
     if (success) {
       exportStatus.value = 'success'
-      toastService.success('Report exported successfully!')
     } else {
       throw new Error(adminStore.error || 'Failed to export report')
     }
